@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { WorldMap } from '@/components/world-map';
+import { WorldMap, type CountryHover } from '@/components/world-map';
+import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { flagEmoji } from '@/lib/utils';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
@@ -21,6 +23,11 @@ const MAX_SCALE = 4;
 const WHEEL_ZOOM_SENSITIVITY = 0.01;
 /** Single-pointer movement (px) before a drag claims the gesture over a tap. */
 const DRAG_THRESHOLD = 4;
+/** Offset (px) between the cursor and the tooltip so it doesn't sit under the pointer. */
+const TOOLTIP_OFFSET = 16;
+/** Rough tooltip footprint, used to keep it from drifting past the viewport edge. */
+const TOOLTIP_WIDTH_ESTIMATE = 200;
+const TOOLTIP_HEIGHT_ESTIMATE = 44;
 
 type Point = { x: number; y: number };
 type Transform = { scale: number; x: number; y: number };
@@ -58,6 +65,41 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
   const [scaleForUi, setScaleForUi] = useState(initialScale);
 
   const gestureStartRef = useRef<{ transform: Transform; pinchDistance: number | null } | null>(null);
+
+  // Mirrors the `transform` pattern above: the tooltip follows the cursor by mutating its
+  // DOM node's style directly on every `mousemove`, so it can track the pointer at 60fps
+  // without a React re-render per pixel. `hoveredCode` (what's shown) changes far less
+  // often, so it's the only piece kept in state.
+  const [hoveredCode, setHoveredCode] = useState<string | null>(null);
+  const tooltipRef = useRef<View>(null);
+
+  const positionTooltip = useCallback((clientX: number, clientY: number) => {
+    const tooltipNode = tooltipRef.current as unknown as HTMLElement | null;
+    const containerNode = containerRef.current as unknown as HTMLElement | null;
+    if (!tooltipNode || !containerNode) return;
+    const rect = containerNode.getBoundingClientRect();
+    const { width, height } = containerSize.current;
+    const x = clamp(clientX - rect.left + TOOLTIP_OFFSET, 0, Math.max(0, width - TOOLTIP_WIDTH_ESTIMATE));
+    const y = clamp(clientY - rect.top + TOOLTIP_OFFSET, 0, Math.max(0, height - TOOLTIP_HEIGHT_ESTIMATE));
+    tooltipNode.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  }, []);
+
+  const handleHoverChange = useCallback(
+    (hover: CountryHover) => {
+      setHoveredCode(hover?.code ?? null);
+      if (hover) positionTooltip(hover.clientX, hover.clientY);
+    },
+    [positionTooltip]
+  );
+
+  // Reassigned every render (like `handleWheelRef` below) so the native listener -- added
+  // once in `setContainerRef` -- always sees the latest `hoveredCode` without having to
+  // detach/reattach itself on every hover change.
+  const handlePointerMoveRef = useRef<(event: MouseEvent) => void>(() => {});
+  handlePointerMoveRef.current = (event: MouseEvent) => {
+    if (!hoveredCode) return;
+    positionTooltip(event.clientX, event.clientY);
+  };
 
   const clampTransform = useCallback(({ scale, x, y }: Transform): Transform => {
     const { width, height } = containerSize.current;
@@ -176,9 +218,17 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     if (Platform.OS !== 'web' || !node) return;
 
     const domNode = node as unknown as HTMLElement;
-    const listener = (event: WheelEvent) => handleWheelRef.current(event);
-    domNode.addEventListener('wheel', listener, { passive: false });
-    wheelListenerCleanupRef.current = () => domNode.removeEventListener('wheel', listener);
+    const wheelListener = (event: WheelEvent) => handleWheelRef.current(event);
+    const moveListener = (event: MouseEvent) => handlePointerMoveRef.current(event);
+    const leaveListener = () => setHoveredCode(null);
+    domNode.addEventListener('wheel', wheelListener, { passive: false });
+    domNode.addEventListener('mousemove', moveListener);
+    domNode.addEventListener('mouseleave', leaveListener);
+    wheelListenerCleanupRef.current = () => {
+      domNode.removeEventListener('wheel', wheelListener);
+      domNode.removeEventListener('mousemove', moveListener);
+      domNode.removeEventListener('mouseleave', leaveListener);
+    };
   }, []);
 
   const panResponder = useMemo(
@@ -251,7 +301,30 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}>
         <View ref={contentRef} style={styles.content}>
-          <WorldMap visited={visited} onToggle={onToggle} />
+          <WorldMap
+            visited={visited}
+            onToggle={onToggle}
+            onHoverChange={Platform.OS === 'web' ? handleHoverChange : undefined}
+          />
+        </View>
+
+        <View
+          ref={tooltipRef}
+          pointerEvents="none"
+          style={[
+            styles.tooltip,
+            {
+              backgroundColor: theme.backgroundElement,
+              borderColor: theme.border,
+              display: hoveredCode ? 'flex' : 'none',
+            },
+          ]}>
+          {hoveredCode ? (
+            <>
+              <ThemedText style={styles.tooltipFlag}>{flagEmoji(hoveredCode)}</ThemedText>
+              <ThemedText type="smallBold">{COUNTRIES_BY_CODE[hoveredCode]?.name}</ThemedText>
+            </>
+          ) : null}
         </View>
       </View>
 
@@ -304,6 +377,21 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: '100%',
+  },
+  tooltip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+  },
+  tooltipFlag: {
+    fontSize: 20,
   },
   zoomControls: {
     position: 'absolute',

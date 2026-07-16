@@ -15,7 +15,11 @@ type WorldMapProps = {
   watermark?: boolean;
   /** Reports the map's rendered pixel size, e.g. so a parent ScrollView can scroll to a country. */
   onLayout?: (event: LayoutChangeEvent) => void;
+  /** Web-only: reports the country under the pointer (with its cursor position), or null once it leaves. */
+  onHoverChange?: (hover: CountryHover) => void;
 };
+
+export type CountryHover = { code: string; clientX: number; clientY: number } | null;
 
 type Location = { id: string; name: string; path: string };
 
@@ -51,6 +55,7 @@ export const WorldMap = memo(function WorldMap({
   interactive = true,
   watermark = false,
   onLayout,
+  onHoverChange,
 }: WorldMapProps) {
   const theme = useTheme();
 
@@ -86,6 +91,16 @@ export const WorldMap = memo(function WorldMap({
           // also pass `onPress: null` (not just omitted/undefined) to opt out of that.
           const pressProps: Record<string, unknown> =
             Platform.OS === 'web' ? { onClick: handlePress, onPress: null } : { onPress: handlePress };
+          // Same rationale as `pressProps` above: react-native-svg's Path types don't cover
+          // DOM mouse events, so these are passed as untyped web-only props.
+          const hoverProps: Record<string, unknown> =
+            Platform.OS === 'web' && !watermark && info.isCountry && onHoverChange
+              ? {
+                  onMouseEnter: (event: { clientX: number; clientY: number }) =>
+                    onHoverChange({ code: location.id, clientX: event.clientX, clientY: event.clientY }),
+                  onMouseLeave: () => onHoverChange(null),
+                }
+              : {};
           return (
             <Path
               key={location.id}
@@ -95,6 +110,7 @@ export const WorldMap = memo(function WorldMap({
               strokeWidth={watermark ? 0 : 0.6}
               opacity={watermark ? 0.05 : 1}
               {...pressProps}
+              {...hoverProps}
             />
           );
         })}
