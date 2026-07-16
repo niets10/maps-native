@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -25,9 +25,7 @@ export default function MapScreen() {
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
       edges={['top', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + Spacing.five }]}
-        showsVerticalScrollIndicator={false}>
+      <View style={[styles.content, { paddingBottom: BottomTabInset + Spacing.three }]}>
         <ThemedView style={styles.header}>
           <ThemedText type="label" themeColor="accent">
             Field Atlas
@@ -62,7 +60,7 @@ export default function MapScreen() {
             />
           </ThemedView>
         )}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -72,11 +70,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
+    flex: 1,
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four + TopBarInset,
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
   header: {
     width: '100%',
@@ -93,9 +91,11 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.two,
   },
   loading: {
-    paddingVertical: Spacing.six,
+    flex: 1,
+    justifyContent: 'center',
   },
   mapCard: {
+    flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
     borderRadius: Spacing.four,

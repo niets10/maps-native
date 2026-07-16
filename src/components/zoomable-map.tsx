@@ -11,14 +11,20 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { WorldMap, type CountryHover } from '@/components/world-map';
+import { MAP_ASPECT_RATIO, WorldMap, type CountryHover } from '@/components/world-map';
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { flagEmoji } from '@/lib/utils';
 
-const MIN_SCALE = 1;
-const MAX_SCALE = 4;
+/** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
+const MIN_SCALE_FLOOR = 1;
+/** How far beyond "cover" (the scale at which the map's shorter dimension exactly fills
+ * the viewport, eliminating letterboxing) the user can still zoom in. */
+const MAX_ZOOM_MULTIPLIER = 4;
+/** Tolerance for comparing the live scale against the (screen-size-dependent) min/max
+ * bounds when deciding whether to disable the zoom buttons. */
+const SCALE_EPSILON = 0.01;
 /** Multiplicative zoom-per-pixel-of-wheel-delta, tuned to feel similar to Google Maps. */
 const WHEEL_ZOOM_SENSITIVITY = 0.01;
 /** Single-pointer movement (px) before a drag claims the gesture over a tap. */
@@ -101,13 +107,34 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     positionTooltip(event.clientX, event.clientY);
   };
 
-  const clampTransform = useCallback(({ scale, x, y }: Transform): Transform => {
+  // The content layer is always exactly as wide as the viewport (see `content`'s style),
+  // so its native (unscaled) height is derived purely from the map artwork's own aspect
+  // ratio -- which, on a tall phone screen, is usually shorter than the viewport itself.
+  // "Cover" (never zoom out past the scale where the map's height reaches the viewport's)
+  // is therefore the effective minimum, so the map always fills the viewport with no
+  // empty bands above/below, the same way a real map app behaves.
+  const getScaleBounds = useCallback((): { min: number; max: number } => {
     const { width, height } = containerSize.current;
-    const nextScale = clamp(scale, MIN_SCALE, MAX_SCALE);
-    const minX = width * (1 - nextScale);
-    const minY = height * (1 - nextScale);
-    return { scale: nextScale, x: clamp(x, minX, 0), y: clamp(y, minY, 0) };
+    if (width === 0 || height === 0) {
+      return { min: MIN_SCALE_FLOOR, max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER };
+    }
+    const nativeContentHeight = width / MAP_ASPECT_RATIO;
+    const coverScale = Math.max(MIN_SCALE_FLOOR, height / nativeContentHeight);
+    return { min: coverScale, max: coverScale * MAX_ZOOM_MULTIPLIER };
   }, []);
+
+  const clampTransform = useCallback(
+    ({ scale, x, y }: Transform): Transform => {
+      const { width, height } = containerSize.current;
+      const { min, max } = getScaleBounds();
+      const nextScale = clamp(scale, min, max);
+      const nativeContentHeight = width / MAP_ASPECT_RATIO;
+      const minX = width * (1 - nextScale);
+      const minY = height - nativeContentHeight * nextScale;
+      return { scale: nextScale, x: clamp(x, minX, 0), y: clamp(y, minY, 0) };
+    },
+    [getScaleBounds]
+  );
 
   const applyTransform = useCallback(() => {
     const { scale, x, y } = transform.current;
@@ -143,7 +170,8 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
 
   const zoomAroundPoint = useCallback(
     (focal: Point, nextScaleRaw: number, from: Transform = transform.current) => {
-      const nextScale = clamp(nextScaleRaw, MIN_SCALE, MAX_SCALE);
+      const { min, max } = getScaleBounds();
+      const nextScale = clamp(nextScaleRaw, min, max);
       const contentX = (focal.x - from.x) / from.scale;
       const contentY = (focal.y - from.y) / from.scale;
       setTransform(
@@ -151,24 +179,28 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
         { syncUi: true }
       );
     },
-    [setTransform]
+    [getScaleBounds, setTransform]
   );
 
   const centerOn = useCallback(
     (focusFraction: Point, scale: number) => {
       const { width, height } = containerSize.current;
       if (width === 0 || height === 0) return;
-      const nextScale = clamp(scale, MIN_SCALE, MAX_SCALE);
+      const { min, max } = getScaleBounds();
+      const nextScale = clamp(scale, min, max);
+      // `focusFraction` is a fraction of the map artwork's own dimensions, not the
+      // viewport's -- only the width happens to line up 1:1 (see `getScaleBounds` above).
+      const nativeContentHeight = width / MAP_ASPECT_RATIO;
       setTransform(
         {
           scale: nextScale,
           x: width / 2 - focusFraction.x * width * nextScale,
-          y: height / 2 - focusFraction.y * height * nextScale,
+          y: height / 2 - focusFraction.y * nativeContentHeight * nextScale,
         },
         { syncUi: true }
       );
     },
-    [setTransform]
+    [getScaleBounds, setTransform]
   );
 
   const handleContainerLayout = useCallback(
@@ -180,8 +212,9 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
         return;
       }
       // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
-      // viewport enough that the current pan/zoom is no longer in bounds.
-      setTransform(transform.current);
+      // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
+      // matters here too, since the cover-fit min/max scale is screen-size-dependent.
+      setTransform(transform.current, { syncUi: true });
     },
     [centerOn, initialFocus, initialScale, setTransform]
   );
@@ -242,7 +275,7 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           gestureState: PanResponderGestureState
         ) => {
           if (event.nativeEvent.touches.length >= 2) return true;
-          if (transform.current.scale <= MIN_SCALE) return false;
+          if (transform.current.scale <= getScaleBounds().min) return false;
           return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
         },
         onPanResponderGrant: (event: GestureResponderEvent) => {
@@ -292,14 +325,16 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           gestureStartRef.current = null;
         },
       }),
-    [setTransform, zoomAroundPoint]
+    [getScaleBounds, setTransform, zoomAroundPoint]
   );
+
+  const { min: minScale, max: maxScale } = getScaleBounds();
 
   return (
     <View style={styles.wrapper}>
       <View
         ref={setContainerRef}
-        style={[styles.viewport, Platform.OS === 'web' && webCursorStyle(scaleForUi > MIN_SCALE)]}
+        style={[styles.viewport, Platform.OS === 'web' && webCursorStyle(scaleForUi > minScale + SCALE_EPSILON)]}
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}>
         <View ref={contentRef} style={styles.content}>
@@ -333,23 +368,23 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
       <View style={styles.zoomControls}>
         <Pressable
           onPress={zoomOut}
-          disabled={scaleForUi <= MIN_SCALE}
+          disabled={scaleForUi <= minScale + SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
             { borderColor: theme.border, backgroundColor: theme.backgroundElement },
             pressed && styles.zoomButtonPressed,
-            scaleForUi <= MIN_SCALE && styles.zoomButtonDisabled,
+            scaleForUi <= minScale + SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
           <ThemedText type="smallBold">−</ThemedText>
         </Pressable>
         <Pressable
           onPress={zoomIn}
-          disabled={scaleForUi >= MAX_SCALE}
+          disabled={scaleForUi >= maxScale - SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
             { borderColor: theme.border, backgroundColor: theme.backgroundElement },
             pressed && styles.zoomButtonPressed,
-            scaleForUi >= MAX_SCALE && styles.zoomButtonDisabled,
+            scaleForUi >= maxScale - SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
           <ThemedText type="smallBold">+</ThemedText>
         </Pressable>
@@ -366,11 +401,12 @@ function webCursorStyle(canPan: boolean) {
 
 const styles = StyleSheet.create({
   wrapper: {
+    flex: 1,
     width: '100%',
   },
   viewport: {
+    flex: 1,
     width: '100%',
-    aspectRatio: 1010 / 666,
     overflow: 'hidden',
     borderRadius: Spacing.two,
   },

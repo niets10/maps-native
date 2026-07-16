@@ -27,6 +27,9 @@ const locations = (worldMap as { locations: Location[] }).locations;
 const viewBox = (worldMap as { viewBox: string }).viewBox;
 const [, , VIEWBOX_WIDTH, VIEWBOX_HEIGHT] = viewBox.split(' ').map(Number);
 
+/** Width/height ratio of the map's own artwork, used by `ZoomableMap` to size its content layer. */
+export const MAP_ASPECT_RATIO = VIEWBOX_WIDTH / VIEWBOX_HEIGHT;
+
 const locationsById = new Map(locations.map((location) => [location.id, location]));
 
 /**
@@ -122,7 +125,7 @@ export const WorldMap = memo(function WorldMap({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    aspectRatio: 1010 / 666,
+    aspectRatio: MAP_ASPECT_RATIO,
   },
   watermarkContainer: {
     ...StyleSheet.absoluteFillObject,
