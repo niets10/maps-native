@@ -30,7 +30,9 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + Spacing.five }]}
         showsVerticalScrollIndicator={false}>

@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useVisitedCountries } from '@/lib/use-visited-countries';
 import { flagEmoji } from '@/lib/utils';
 
-type Section = { title: string; data: Country[]; visitedCount: number };
+type Section = { title: string; data: Country[]; visitedCount: number; totalCount: number };
 
 export default function CountriesScreen() {
   const theme = useTheme();
@@ -28,12 +28,15 @@ export default function CountriesScreen() {
         title: continent,
         data,
         visitedCount: countriesInContinent.filter((c) => visited.has(c.code)).length,
+        totalCount: countriesInContinent.length,
       };
     }).filter((section) => section.data.length > 0);
   }, [query, visited]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}>
       <View style={styles.centerColumn}>
         <View style={styles.headerBlock}>
           <ThemedText type="label" themeColor="accent">
@@ -59,13 +62,15 @@ export default function CountriesScreen() {
           contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.five }}
           stickySectionHeadersEnabled
           renderSectionHeader={({ section }) => (
-            <ThemedView style={styles.sectionHeader}>
-              <ThemedText type="smallBold">{section.title}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {section.visitedCount}/{
-                  COUNTRIES.filter((c) => c.continent === section.title).length
-                }
+            <ThemedView type="backgroundElement" style={styles.sectionHeader}>
+              <ThemedText type="label" themeColor="textSecondary">
+                {section.title}
               </ThemedText>
+              <ThemedView type="accentSoft" style={styles.sectionCount}>
+                <ThemedText type="smallBold" themeColor="accent">
+                  {section.visitedCount}/{section.totalCount}
+                </ThemedText>
+              </ThemedView>
             </ThemedView>
           )}
           renderItem={({ item }) => {
@@ -129,7 +134,17 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginTop: Spacing.three,
+    marginBottom: Spacing.two,
+    borderRadius: Spacing.three,
+  },
+  sectionCount: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Spacing.four,
   },
   row: {
     flexDirection: 'row',

@@ -1,11 +1,11 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : (scheme ?? 'light')];
+  const colors = Colors[scheme ?? 'light'];
 
   return (
     <NativeTabs
@@ -14,27 +14,18 @@ export default function AppTabs() {
       tintColor={colors.accent}
       labelStyle={{ selected: { color: colors.text } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'map', selected: 'map.fill' }}
-          md={{ default: 'map', selected: 'map' }}
-        />
+        <Label>Map</Label>
+        <Icon sf={{ default: 'map', selected: 'map.fill' }} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Countries</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'list.bullet', selected: 'list.bullet' }}
-          md={{ default: 'list', selected: 'list' }}
-        />
+        <Label>Countries</Label>
+        <Icon sf={{ default: 'list.bullet', selected: 'list.bullet' }} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="profile">
-        <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
-          md={{ default: 'person', selected: 'person' }}
-        />
+        <Label>Profile</Label>
+        <Icon sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

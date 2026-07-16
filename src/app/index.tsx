@@ -1,19 +1,50 @@
-import { ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WorldMap } from '@/components/world-map';
+import { getCountryFocusFraction, WorldMap } from '@/components/world-map';
 import { BottomTabInset, MaxContentWidth, Spacing, TopBarInset } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useVisitedCountries } from '@/lib/use-visited-countries';
 import { computeTravelStats } from '@/lib/stats';
 
+const FOCUS_COUNTRY_CODE = 'es';
+
 export default function MapScreen() {
+  const theme = useTheme();
   const { visited, isLoading, toggle } = useVisitedCountries();
   const stats = computeTravelStats(visited);
 
+  const mapScrollRef = useRef<ScrollView>(null);
+  const hasCenteredRef = useRef(false);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [mapWidth, setMapWidth] = useState(0);
+
+  const focusFraction = useMemo(() => getCountryFocusFraction(FOCUS_COUNTRY_CODE), []);
+
+  const handleViewportLayout = useCallback((event: LayoutChangeEvent) => {
+    setViewportWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
+    setMapWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  useEffect(() => {
+    if (hasCenteredRef.current || !focusFraction || viewportWidth === 0 || mapWidth === 0) return;
+
+    const maxScrollX = Math.max(mapWidth - viewportWidth, 0);
+    const targetX = focusFraction.x * mapWidth - viewportWidth / 2;
+    mapScrollRef.current?.scrollTo({ x: Math.min(Math.max(targetX, 0), maxScrollX), animated: false });
+    hasCenteredRef.current = true;
+  }, [focusFraction, viewportWidth, mapWidth]);
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + Spacing.five }]}
         showsVerticalScrollIndicator={false}>
@@ -44,12 +75,14 @@ export default function MapScreen() {
               Tap a country to mark it as visited.
             </ThemedText>
             <ScrollView
+              ref={mapScrollRef}
               horizontal
               minimumZoomScale={1}
               maximumZoomScale={4}
               showsHorizontalScrollIndicator={false}
+              onLayout={handleViewportLayout}
               contentContainerStyle={styles.mapScrollContent}>
-              <WorldMap visited={visited} onToggle={toggle} />
+              <WorldMap visited={visited} onToggle={toggle} onLayout={handleMapLayout} />
             </ScrollView>
           </ThemedView>
         )}

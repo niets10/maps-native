@@ -1,13 +1,36 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 
 type VisitedRow = { country_code: string };
 
+type VisitedCountriesValue = {
+  visited: Set<string>;
+  isLoading: boolean;
+  error: string | null;
+  toggle: (countryCode: string) => Promise<void>;
+};
+
 const EMPTY_VISITED: Set<string> = new Set();
 
-export function useVisitedCountries() {
+const VisitedCountriesContext = createContext<VisitedCountriesValue | undefined>(undefined);
+
+/**
+ * Owns the single Supabase realtime subscription for the signed-in user's visited countries.
+ * Must wrap every screen that reads `useVisitedCountries()` — Supabase reuses one channel per
+ * topic, so subscribing to the same topic twice (e.g. from multiple mounted tab screens) throws
+ * "cannot add postgres_changes callbacks ... after subscribe()".
+ */
+export function VisitedCountriesProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const userId = session?.user.id;
 
@@ -94,8 +117,16 @@ export function useVisitedCountries() {
     [userId, visited]
   );
 
-  return useMemo(() => {
+  const value = useMemo<VisitedCountriesValue>(() => {
     if (!userId) return { visited: EMPTY_VISITED, isLoading: false, error, toggle };
     return { visited, isLoading: loadedForUserId !== userId, error, toggle };
   }, [userId, visited, loadedForUserId, error, toggle]);
+
+  return <VisitedCountriesContext.Provider value={value}>{children}</VisitedCountriesContext.Provider>;
+}
+
+export function useVisitedCountries() {
+  const context = useContext(VisitedCountriesContext);
+  if (!context) throw new Error('useVisitedCountries must be used within a VisitedCountriesProvider');
+  return context;
 }
