@@ -1,5 +1,5 @@
 import worldMap from '@svg-maps/world';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -38,7 +38,14 @@ export function getCountryFocusFraction(countryCode: string): { x: number; y: nu
   return { x: center.x / VIEWBOX_WIDTH, y: center.y / VIEWBOX_HEIGHT };
 }
 
-export function WorldMap({
+/**
+ * Memoized because it's rendered inside `ZoomableMap`, which mutates a pan/zoom
+ * transform directly on its wrapping DOM node during drag/wheel/pinch gestures
+ * (bypassing React state for smoothness). Without `memo`, every re-render of an
+ * ancestor -- including ones with no props change for `WorldMap` -- would redo
+ * the ~250-path `fills` computation and JSX for nothing.
+ */
+export const WorldMap = memo(function WorldMap({
   visited,
   onToggle,
   interactive = true,
@@ -94,7 +101,7 @@ export function WorldMap({
       </Svg>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
