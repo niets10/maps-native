@@ -1,0 +1,33 @@
+---
+description: Enforce high-quality, distinctive frontend design when building or styling UI components, pages, or layouts.
+globs: **/*.{js,jsx,ts,tsx,css,module.css}
+alwaysApply: false
+---
+
+# Frontend Design Standards
+
+When building or significantly styling any UI component, page, or layout, apply the full design thinking process from:
+
+`/Users/alvarogonzaleznieto/Desktop/Projects/tilde/.cursor/skills/frontend-design/SKILL.md`
+
+## Before Writing Code
+
+Commit to a clear aesthetic direction:
+- **Purpose**: Who uses this and what problem does it solve?
+- **Tone**: Pick one direction and execute it with precision (minimal/refined, editorial, industrial, geometric, etc.)
+- **Differentiation**: What makes this memorable?
+
+## Non-Negotiable Design Rules
+
+- **Typography**: Never use Inter, Roboto, Arial, or other generic system fonts. Choose distinctive, characterful fonts.
+- **Color**: Commit to a dominant palette with sharp accents. No wishy-washy evenly-distributed colors.
+- **No generic AI aesthetics**: No purple-on-white gradients, no predictable card layouts, no cookie-cutter patterns.
+- **Motion**: Use animations intentionally — one well-orchestrated entrance is worth more than scattered micro-interactions.
+- **Backgrounds**: Use depth and atmosphere (gradients, textures, layered transparencies) rather than flat solid colors.
+
+## Implementation
+
+- Tailwind utility classes are the primary styling tool (per project rules)
+- Use CSS modules only when Tailwind cannot express the style (pseudo-elements, keyframes, complex selectors)
+- Never use `@apply`
+- Use CSS variable tokens from `globals.css` when available

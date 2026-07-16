@@ -1,0 +1,26 @@
+---
+description: Enforce Vercel React/Next.js performance best practices when writing or editing React components, hooks, pages, or data fetching code.
+globs: **/*.{js,jsx,ts,tsx}
+alwaysApply: false
+---
+
+# Vercel React Best Practices
+
+When writing or editing any React component, Next.js page, hook, or data fetching logic, apply the rules from the skill at:
+
+`/Users/alvarogonzaleznieto/Desktop/Projects/tilde/.cursor/skills/vercel-react-best-practices/SKILL.md`
+
+## Priority Order
+
+1. **CRITICAL** — Eliminate waterfalls: use `Promise.all()` for independent fetches, start promises early, use Suspense boundaries
+2. **CRITICAL** — Bundle size: import directly (no barrel files), use `next/dynamic` for heavy components
+3. **HIGH** — Server performance: use `React.cache()`, authenticate server actions, parallelize RSC fetches
+4. **MEDIUM** — Re-renders: derive state during render (not effects), avoid inline components, use functional `setState`
+5. **MEDIUM** — Rendering: use ternary (not `&&`) for conditionals, wrap SVG animations in a `<div>`
+
+## Non-Negotiable Rules
+
+- Never define components inside other components (`rerender-no-inline-components`)
+- Never use `&&` with numeric/falsy conditions — always use ternary (`rendering-conditional-render`)
+- Always use `useCallback`/`useMemo` with stable primitive dependencies
+- Prefer server components; only add `'use client'` when interactivity is required

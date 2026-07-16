@@ -1,0 +1,36 @@
+---
+description: Always re-use existing functions before creating new ones
+alwaysApply: true
+---
+
+# Reuse Before Create
+
+Before writing a new utility function, always check if an equivalent already exists — especially in `lib/utils.js`.
+
+## Process
+
+1. Search the codebase (particularly `lib/utils.js`) for functions with similar logic or purpose.
+2. If a match exists, import and use it. Do not duplicate it locally.
+3. If the function is useful beyond a single component, add it to `lib/utils.js` and export it rather than defining it inline.
+
+## Examples
+
+```js
+// ❌ BAD — defining a local helper that already exists in lib/utils.js
+const formatLocalDate = (date) => {
+    if (!date) return '';
+    const year = date.getFullYear();
+    // ...
+};
+
+// ✅ GOOD — import the existing utility
+import { formatLocalDateKey } from '@/lib/utils';
+```
+
+```js
+// ❌ BAD — defining a one-off parser that belongs in lib/utils.js
+const parseToLocalDate = (dateStr) => { ... };
+
+// ✅ GOOD — move it to lib/utils.js, export it, and import it
+import { parseToLocalDate } from '@/lib/utils';
+```
