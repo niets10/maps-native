@@ -70,7 +70,13 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
   const transform = useRef<Transform>({ scale: initialScale, x: 0, y: 0 });
   const [scaleForUi, setScaleForUi] = useState(initialScale);
 
-  const gestureStartRef = useRef<{ transform: Transform; pinchDistance: number | null } | null>(null);
+  const gestureStartRef = useRef<{
+    transform: Transform;
+    pinchDistance: number | null;
+    pinchMidpoint: Point | null;
+    /** Cumulative dx/dy from PanResponder grant at the moment this drag segment began. */
+    dragOrigin: Point;
+  } | null>(null);
 
   // Mirrors the `transform` pattern above: the tooltip follows the cursor by mutating its
   // DOM node's style directly on every `mousemove`, so it can track the pointer at 60fps
@@ -151,10 +157,14 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     }
     // `contentRef` is a native View here, which has no DOM `.style` -- mutate it
     // imperatively via `setNativeProps` instead, bypassing React state so pan/pinch
-    // stay smooth. Array order matters: scale first (pivoting at transformOrigin),
-    // then translate, to match the CSS transform above.
+    // stay smooth. RN applies transforms right-to-left (like CSS), so listing
+    // translate then scale matches the web `translate3d(...) scale(...)` string:
+    // scale around the origin first, then translate.
     contentRef.current?.setNativeProps({
-      style: { transform: [{ scale }, { translateX: x }, { translateY: y }], transformOrigin: [0, 0, 0] },
+      style: {
+        transform: [{ translateX: x }, { translateY: y }, { scale }],
+        transformOrigin: [0, 0, 0],
+      },
     });
   }, []);
 
@@ -266,6 +276,46 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     };
   }, []);
 
+  const canPanAtCurrentScale = useCallback(() => {
+    const { width, height } = containerSize.current;
+    if (width === 0 || height === 0) return false;
+    const { scale } = transform.current;
+    const contentHeight = width / MAP_ASPECT_RATIO;
+    // Allow drag whenever the map overflows the viewport on either axis -- including
+    // the cover-fit minimum on tall phones, where the map is wider than the screen.
+    return width * scale > width + 0.5 || contentHeight * scale > height + 0.5;
+  }, []);
+
+  const captureGestureStart = useCallback((
+    event: GestureResponderEvent,
+    gestureState?: PanResponderGestureState
+  ) => {
+    const touches = event.nativeEvent.touches;
+    const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
+    if (touches.length >= 2) {
+      const pinchDistance = Math.hypot(
+        touches[0].locationX - touches[1].locationX,
+        touches[0].locationY - touches[1].locationY
+      );
+      gestureStartRef.current = {
+        transform: transform.current,
+        pinchDistance,
+        pinchMidpoint: {
+          x: (touches[0].locationX + touches[1].locationX) / 2,
+          y: (touches[0].locationY + touches[1].locationY) / 2,
+        },
+        dragOrigin,
+      };
+      return;
+    }
+    gestureStartRef.current = {
+      transform: transform.current,
+      pinchDistance: null,
+      pinchMidpoint: null,
+      dragOrigin,
+    };
+  }, []);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -275,27 +325,26 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           gestureState: PanResponderGestureState
         ) => {
           if (event.nativeEvent.touches.length >= 2) return true;
-          if (transform.current.scale <= getScaleBounds().min) return false;
+          if (!canPanAtCurrentScale()) return false;
           return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
         },
         onPanResponderGrant: (event: GestureResponderEvent) => {
           userInteractedRef.current = true;
-          const touches = event.nativeEvent.touches;
-          const pinchDistance =
-            touches.length >= 2
-              ? Math.hypot(
-                  touches[0].locationX - touches[1].locationX,
-                  touches[0].locationY - touches[1].locationY
-                )
-              : null;
-          gestureStartRef.current = { transform: transform.current, pinchDistance };
+          captureGestureStart(event);
         },
         onPanResponderMove: (event: GestureResponderEvent, gestureState: PanResponderGestureState) => {
-          const start = gestureStartRef.current;
-          if (!start) return;
           const touches = event.nativeEvent.touches;
+          let start = gestureStartRef.current;
 
-          if (touches.length >= 2 && start.pinchDistance) {
+          // Second finger landed mid-drag -- restart as a pinch from the live transform.
+          if (touches.length >= 2 && (!start?.pinchDistance || !start.pinchMidpoint)) {
+            captureGestureStart(event, gestureState);
+            start = gestureStartRef.current;
+          }
+
+          if (!start) return;
+
+          if (touches.length >= 2 && start.pinchDistance && start.pinchMidpoint) {
             const distance = Math.hypot(
               touches[0].locationX - touches[1].locationX,
               touches[0].locationY - touches[1].locationY
@@ -304,18 +353,37 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
               x: (touches[0].locationX + touches[1].locationX) / 2,
               y: (touches[0].locationY + touches[1].locationY) / 2,
             };
-            zoomAroundPoint(
-              midpoint,
+            // Keep the content under the original pinch midpoint locked to the
+            // moving midpoint (standard map pinch = zoom + pan together).
+            const { min, max } = getScaleBounds();
+            const nextScale = clamp(
               start.transform.scale * (distance / start.pinchDistance),
-              start.transform
+              min,
+              max
             );
+            const contentX = (start.pinchMidpoint.x - start.transform.x) / start.transform.scale;
+            const contentY = (start.pinchMidpoint.y - start.transform.y) / start.transform.scale;
+            setTransform(
+              {
+                scale: nextScale,
+                x: midpoint.x - contentX * nextScale,
+                y: midpoint.y - contentY * nextScale,
+              },
+              { syncUi: true }
+            );
+            return;
+          }
+
+          // Dropped back to one finger mid-pinch -- restart as a drag.
+          if (start.pinchDistance) {
+            captureGestureStart(event, gestureState);
             return;
           }
 
           setTransform({
             scale: start.transform.scale,
-            x: start.transform.x + gestureState.dx,
-            y: start.transform.y + gestureState.dy,
+            x: start.transform.x + (gestureState.dx - start.dragOrigin.x),
+            y: start.transform.y + (gestureState.dy - start.dragOrigin.y),
           });
         },
         onPanResponderRelease: () => {
@@ -325,7 +393,7 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           gestureStartRef.current = null;
         },
       }),
-    [getScaleBounds, setTransform, zoomAroundPoint]
+    [canPanAtCurrentScale, captureGestureStart, getScaleBounds, setTransform]
   );
 
   const { min: minScale, max: maxScale } = getScaleBounds();
