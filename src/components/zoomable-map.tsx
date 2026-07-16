@@ -42,6 +42,24 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+/** Pinch distance + midpoint in container-local coords, derived from screen-space touches. */
+function getPinchFromPageTouches(
+  touches: { pageX: number; pageY: number }[],
+  pageOrigin: Point
+): { distance: number; midpoint: Point } | null {
+  if (touches.length < 2) return null;
+  const [a, b] = touches;
+  const distance = Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+  if (distance < 1) return null;
+  return {
+    distance,
+    midpoint: {
+      x: (a.pageX + b.pageX) / 2 - pageOrigin.x,
+      y: (a.pageY + b.pageY) / 2 - pageOrigin.y,
+    },
+  };
+}
+
 type ZoomableMapProps = {
   visited: Set<string>;
   onToggle?: (countryCode: string) => void;
@@ -57,6 +75,12 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
   const containerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
   const containerSize = useRef({ width: 0, height: 0 });
+  // Screen-space origin of the viewport, kept in sync via `measureInWindow` so pinch
+  // math can convert `pageX`/`pageY` into container-local coordinates. Using
+  // `locationX`/`locationY` for multi-touch is wrong here: each finger often lands on a
+  // different SVG `<Path>`, so those values live in different local spaces and the
+  // computed pinch distance/midpoint is garbage.
+  const containerPageOrigin = useRef<Point>({ x: 0, y: 0 });
   // Web layout can settle over a couple of passes (fonts, safe-area insets, etc.), so we
   // keep re-centering on `initialFocus` across layout events until the user actually
   // performs a gesture -- otherwise an early, smaller measurement can lock in an
@@ -217,6 +241,9 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
       containerSize.current = { width, height };
+      containerRef.current?.measureInWindow((x, y) => {
+        containerPageOrigin.current = { x, y };
+      });
       if (!userInteractedRef.current && initialFocus) {
         centerOn(initialFocus, initialScale);
         return;
@@ -290,20 +317,13 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     event: GestureResponderEvent,
     gestureState?: PanResponderGestureState
   ) => {
-    const touches = event.nativeEvent.touches;
     const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
-    if (touches.length >= 2) {
-      const pinchDistance = Math.hypot(
-        touches[0].locationX - touches[1].locationX,
-        touches[0].locationY - touches[1].locationY
-      );
+    const pinch = getPinchFromPageTouches(event.nativeEvent.touches, containerPageOrigin.current);
+    if (pinch) {
       gestureStartRef.current = {
         transform: transform.current,
-        pinchDistance,
-        pinchMidpoint: {
-          x: (touches[0].locationX + touches[1].locationX) / 2,
-          y: (touches[0].locationY + touches[1].locationY) / 2,
-        },
+        pinchDistance: pinch.distance,
+        pinchMidpoint: pinch.midpoint,
         dragOrigin,
       };
       return;
@@ -320,6 +340,12 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
+        // Steal two-finger touches before SVG country paths claim them -- otherwise the
+        // parent never becomes the responder and pinch never starts.
+        onStartShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
+          event.nativeEvent.touches.length >= 2,
+        onMoveShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
+          event.nativeEvent.touches.length >= 2,
         onMoveShouldSetPanResponder: (
           event: GestureResponderEvent,
           gestureState: PanResponderGestureState
@@ -345,19 +371,13 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           if (!start) return;
 
           if (touches.length >= 2 && start.pinchDistance && start.pinchMidpoint) {
-            const distance = Math.hypot(
-              touches[0].locationX - touches[1].locationX,
-              touches[0].locationY - touches[1].locationY
-            );
-            const midpoint = {
-              x: (touches[0].locationX + touches[1].locationX) / 2,
-              y: (touches[0].locationY + touches[1].locationY) / 2,
-            };
+            const pinch = getPinchFromPageTouches(touches, containerPageOrigin.current);
+            if (!pinch) return;
             // Keep the content under the original pinch midpoint locked to the
             // moving midpoint (standard map pinch = zoom + pan together).
             const { min, max } = getScaleBounds();
             const nextScale = clamp(
-              start.transform.scale * (distance / start.pinchDistance),
+              start.transform.scale * (pinch.distance / start.pinchDistance),
               min,
               max
             );
@@ -366,8 +386,8 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
             setTransform(
               {
                 scale: nextScale,
-                x: midpoint.x - contentX * nextScale,
-                y: midpoint.y - contentY * nextScale,
+                x: pinch.midpoint.x - contentX * nextScale,
+                y: pinch.midpoint.y - contentY * nextScale,
               },
               { syncUi: true }
             );
