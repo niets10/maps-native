@@ -110,15 +110,25 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
   }, []);
 
   const applyTransform = useCallback(() => {
-    const node = contentRef.current as unknown as HTMLElement | null;
-    if (!node) return;
     const { scale, x, y } = transform.current;
     // All the pan/zoom math below (clampTransform, zoomAroundPoint, centerOn) assumes
     // `screen = translate + scale * content`, i.e. scaling pivots around the content's
-    // own top-left corner. CSS defaults transform-origin to the element's center, so it
-    // must be pinned to "0 0" or every formula below is off.
-    node.style.transformOrigin = '0 0';
-    node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    // own top-left corner. Both platforms default the pivot to the element's center, so
+    // it must be pinned to the top-left corner or every formula below is off.
+    if (Platform.OS === 'web') {
+      const node = contentRef.current as unknown as HTMLElement | null;
+      if (!node) return;
+      node.style.transformOrigin = '0 0';
+      node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+      return;
+    }
+    // `contentRef` is a native View here, which has no DOM `.style` -- mutate it
+    // imperatively via `setNativeProps` instead, bypassing React state so pan/pinch
+    // stay smooth. Array order matters: scale first (pivoting at transformOrigin),
+    // then translate, to match the CSS transform above.
+    contentRef.current?.setNativeProps({
+      style: { transform: [{ scale }, { translateX: x }, { translateY: y }], transformOrigin: [0, 0, 0] },
+    });
   }, []);
 
   const setTransform = useCallback(
