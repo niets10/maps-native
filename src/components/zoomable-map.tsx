@@ -189,25 +189,17 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
 
   // Trackpad pinch-to-zoom and ctrl+scroll both fire as `wheel` events with
   // `ctrlKey: true` in browsers -- there's no native multi-touch event for trackpad
-  // gestures. A plain two-finger scroll (no ctrl) pans instead, like Google Maps.
+  // gestures. A plain two-finger scroll (no ctrl) zooms too: pushing both fingers
+  // forward (away from you) zooms in, pulling them back zooms out. Panning is
+  // reserved for click-and-drag, matching Google Maps' touchscreen behavior.
   const handleWheelRef = useRef<(event: WheelEvent) => void>(() => {});
   handleWheelRef.current = (event: WheelEvent) => {
     event.preventDefault();
     userInteractedRef.current = true;
     const rect = (containerRef.current as unknown as HTMLElement).getBoundingClientRect();
     const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-
-    if (event.ctrlKey) {
-      const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY);
-      zoomAroundPoint(focal, transform.current.scale * factor);
-      return;
-    }
-
-    setTransform({
-      scale: transform.current.scale,
-      x: transform.current.x - event.deltaX,
-      y: transform.current.y - event.deltaY,
-    });
+    const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY);
+    zoomAroundPoint(focal, transform.current.scale * factor);
   };
 
   const wheelListenerCleanupRef = useRef<(() => void) | null>(null);
