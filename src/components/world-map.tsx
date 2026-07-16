@@ -73,8 +73,12 @@ export function WorldMap({
           const handlePress = canPress ? () => onToggle!(location.id) : undefined;
           // react-native-svg's onPress mixes in a legacy Touchable responder handler that
           // react-native-web forwards straight to the DOM <path>, logging "Unknown event
-          // handler property" warnings. onClick avoids that mixin entirely on web.
-          const pressProps = Platform.OS === 'web' ? { onClick: handlePress } : { onPress: handlePress };
+          // handler property" warnings, so we use onClick directly on web instead. Its web
+          // shape-prop preparer unconditionally runs `if (onPress !== null) clean.onClick =
+          // props.onPress`, which clobbers a plain `onClick` back to `undefined` unless we
+          // also pass `onPress: null` (not just omitted/undefined) to opt out of that.
+          const pressProps: Record<string, unknown> =
+            Platform.OS === 'web' ? { onClick: handlePress, onPress: null } : { onPress: handlePress };
           return (
             <Path
               key={location.id}
