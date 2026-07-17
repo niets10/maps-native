@@ -13,6 +13,13 @@ type WorldMapProps = {
   interactive?: boolean;
   /** Renders the whole map as a flat, low-opacity watermark (used on the auth screen). */
   watermark?: boolean;
+  /**
+   * Fill the parent instead of sizing to the map's intrinsic aspect ratio. Used on
+   * native by ZoomableMap's sharp idle layer (viewBox crop).
+   */
+  fillParent?: boolean;
+  /** Override the SVG viewBox (e.g. a cropped region for native idle zoom). */
+  mapViewBox?: string;
   /** Reports the map's rendered pixel size, e.g. so a parent ScrollView can scroll to a country. */
   onLayout?: (event: LayoutChangeEvent) => void;
   /** Web-only: reports the country under the pointer (with its cursor position), or null once it leaves. */
@@ -24,8 +31,12 @@ export type CountryHover = { code: string; clientX: number; clientY: number } | 
 type Location = { id: string; name: string; path: string };
 
 const locations = (worldMap as { locations: Location[] }).locations;
-const viewBox = (worldMap as { viewBox: string }).viewBox;
-const [, , VIEWBOX_WIDTH, VIEWBOX_HEIGHT] = viewBox.split(' ').map(Number);
+const defaultViewBox = (worldMap as { viewBox: string }).viewBox;
+const [, , VIEWBOX_WIDTH, VIEWBOX_HEIGHT] = defaultViewBox.split(' ').map(Number);
+
+export const MAP_VIEWBOX_WIDTH = VIEWBOX_WIDTH;
+export const MAP_VIEWBOX_HEIGHT = VIEWBOX_HEIGHT;
+export const MAP_VIEWBOX = defaultViewBox;
 
 /** Width/height ratio of the map's own artwork, used by `ZoomableMap` to size its content layer. */
 export const MAP_ASPECT_RATIO = VIEWBOX_WIDTH / VIEWBOX_HEIGHT;
@@ -57,6 +68,8 @@ export const WorldMap = memo(function WorldMap({
   onToggle,
   interactive = true,
   watermark = false,
+  fillParent = false,
+  mapViewBox = defaultViewBox,
   onLayout,
   onHoverChange,
 }: WorldMapProps) {
@@ -79,9 +92,20 @@ export const WorldMap = memo(function WorldMap({
     return map;
   }, [visited, theme, watermark]);
 
+  const containerStyle = watermark
+    ? styles.watermarkContainer
+    : fillParent
+      ? styles.fillContainer
+      : styles.container;
+
   return (
-    <View style={watermark ? styles.watermarkContainer : styles.container} onLayout={onLayout}>
-      <Svg viewBox={viewBox} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+    <View style={containerStyle} onLayout={onLayout}>
+      <Svg
+        viewBox={mapViewBox}
+        width="100%"
+        height="100%"
+        // `none` when ZoomableMap drives a viewport-aspect viewBox; `meet` otherwise.
+        preserveAspectRatio={fillParent ? 'none' : 'xMidYMid meet'}>
         {locations.map((location) => {
           const info = fills.get(location.id)!;
           const canPress = interactive && !watermark && info.isCountry && onToggle;
@@ -126,6 +150,9 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     aspectRatio: MAP_ASPECT_RATIO,
+  },
+  fillContainer: {
+    ...StyleSheet.absoluteFillObject,
   },
   watermarkContainer: {
     ...StyleSheet.absoluteFillObject,

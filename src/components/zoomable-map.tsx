@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   PanResponder,
   Platform,
@@ -11,7 +11,14 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MAP_ASPECT_RATIO, WorldMap, type CountryHover } from '@/components/world-map';
+import {
+  MAP_ASPECT_RATIO,
+  MAP_VIEWBOX,
+  MAP_VIEWBOX_HEIGHT,
+  MAP_VIEWBOX_WIDTH,
+  WorldMap,
+  type CountryHover,
+} from '@/components/world-map';
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -35,11 +42,35 @@ const TOOLTIP_OFFSET = 16;
 const TOOLTIP_WIDTH_ESTIMATE = 200;
 const TOOLTIP_HEIGHT_ESTIMATE = 44;
 
+const IDENTITY_TRANSFORM = {
+  transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }],
+  transformOrigin: [0, 0, 0],
+};
+
 type Point = { x: number; y: number };
 type Transform = { scale: number; x: number; y: number };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Convert the logical pan/zoom transform into an SVG viewBox. Used on native when idle
+ * so the map stays sharp; during gestures we use a cheap View transform instead.
+ */
+function transformToViewBox(
+  { scale, x, y }: Transform,
+  viewportWidth: number,
+  viewportHeight: number
+): string {
+  if (viewportWidth <= 0 || viewportHeight <= 0 || scale <= 0) return MAP_VIEWBOX;
+  const contentWidth = viewportWidth;
+  const contentHeight = contentWidth / MAP_ASPECT_RATIO;
+  const vbX = ((0 - x) / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
+  const vbY = ((0 - y) / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
+  const vbW = (viewportWidth / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
+  const vbH = (viewportHeight / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
+  return `${vbX} ${vbY} ${vbW} ${vbH}`;
 }
 
 /** Pinch distance + midpoint in container-local coords, derived from screen-space touches. */
@@ -71,6 +102,7 @@ type ZoomableMapProps = {
 
 export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 }: ZoomableMapProps) {
   const theme = useTheme();
+  const isNative = Platform.OS !== 'web';
 
   const containerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
@@ -87,12 +119,19 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
   // off-center transform that a later, correct measurement never fixes.
   const userInteractedRef = useRef(false);
 
-  // The transform is mutated directly on the content node's DOM style for every
-  // pointer/wheel tick (see `applyTransform`), so dragging and pinching stay smooth
-  // without round-tripping through React state on every frame. `scaleForUi` is the
-  // only piece we mirror into React state, since the zoom buttons need to re-render.
+  // The transform is mutated directly on the content node for every pointer/wheel tick
+  // (see `applyTransform`), so dragging and pinching stay smooth without round-tripping
+  // through React state on every frame. `scaleForUi` is the only piece we mirror into
+  // React state, since the zoom buttons need to re-render.
   const transform = useRef<Transform>({ scale: initialScale, x: 0, y: 0 });
   const [scaleForUi, setScaleForUi] = useState(initialScale);
+
+  // Native hybrid: idle = sharp viewBox crop; gesture = cheap View scale/pan (may soften
+  // briefly), then bake back into viewBox on release. Updating viewBox every frame was
+  // what froze the map.
+  const isGesturingRef = useRef(false);
+  const [isGesturing, setIsGesturing] = useState(false);
+  const [idleViewBox, setIdleViewBox] = useState(MAP_VIEWBOX);
 
   const gestureStartRef = useRef<{
     transform: Transform;
@@ -166,41 +205,76 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
     [getScaleBounds]
   );
 
+  const commitIdleViewBox = useCallback(() => {
+    if (!isNative) return;
+    const { width, height } = containerSize.current;
+    if (width === 0 || height === 0) return;
+    setIdleViewBox(transformToViewBox(transform.current, width, height));
+  }, [isNative]);
+
   const applyTransform = useCallback(() => {
     const { scale, x, y } = transform.current;
     // All the pan/zoom math below (clampTransform, zoomAroundPoint, centerOn) assumes
     // `screen = translate + scale * content`, i.e. scaling pivots around the content's
     // own top-left corner. Both platforms default the pivot to the element's center, so
     // it must be pinned to the top-left corner or every formula below is off.
-    if (Platform.OS === 'web') {
+    if (!isNative) {
       const node = contentRef.current as unknown as HTMLElement | null;
       if (!node) return;
       node.style.transformOrigin = '0 0';
       node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
       return;
     }
-    // `contentRef` is a native View here, which has no DOM `.style` -- mutate it
-    // imperatively via `setNativeProps` instead, bypassing React state so pan/pinch
-    // stay smooth. RN applies transforms right-to-left (like CSS), so listing
-    // translate then scale matches the web `translate3d(...) scale(...)` string:
-    // scale around the origin first, then translate.
+    // Native idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
+    if (!isGesturingRef.current) {
+      contentRef.current?.setNativeProps({ style: IDENTITY_TRANSFORM });
+      return;
+    }
+    // Native gesture: GPU-scale the full map (responsive). Softness is OK mid-gesture;
+    // we bake a sharp viewBox on release.
     contentRef.current?.setNativeProps({
       style: {
         transform: [{ translateX: x }, { translateY: y }, { scale }],
         transformOrigin: [0, 0, 0],
       },
     });
-  }, []);
+  }, [isNative]);
 
   const setTransform = useCallback(
-    (next: Transform, options?: { syncUi?: boolean }) => {
+    (next: Transform, options?: { syncUi?: boolean; commitViewBox?: boolean }) => {
       const clamped = clampTransform(next);
       transform.current = clamped;
       applyTransform();
       if (options?.syncUi) setScaleForUi(clamped.scale);
+      if (options?.commitViewBox) commitIdleViewBox();
     },
-    [applyTransform, clampTransform]
+    [applyTransform, clampTransform, commitIdleViewBox]
   );
+
+  // When entering gesture mode, reveal the full-map layer and paint the absolute
+  // transform. When leaving, hide it again (idle viewBox takes over).
+  useLayoutEffect(() => {
+    if (!isNative) return;
+    isGesturingRef.current = isGesturing;
+    applyTransform();
+  }, [isGesturing, isNative, applyTransform]);
+
+  const beginGesture = useCallback(() => {
+    if (!isNative) return;
+    setIsGesturing(true);
+  }, [isNative]);
+
+  const endGesture = useCallback(() => {
+    gestureStartRef.current = null;
+    if (!isNative) {
+      setScaleForUi(transform.current.scale);
+      return;
+    }
+    isGesturingRef.current = false;
+    commitIdleViewBox();
+    setIsGesturing(false);
+    setScaleForUi(transform.current.scale);
+  }, [commitIdleViewBox, isNative]);
 
   const zoomAroundPoint = useCallback(
     (focal: Point, nextScaleRaw: number, from: Transform = transform.current) => {
@@ -210,10 +284,10 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
       const contentY = (focal.y - from.y) / from.scale;
       setTransform(
         { scale: nextScale, x: focal.x - contentX * nextScale, y: focal.y - contentY * nextScale },
-        { syncUi: true }
+        { syncUi: true, commitViewBox: isNative && !isGesturingRef.current }
       );
     },
-    [getScaleBounds, setTransform]
+    [getScaleBounds, isNative, setTransform]
   );
 
   const centerOn = useCallback(
@@ -231,10 +305,10 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           x: width / 2 - focusFraction.x * width * nextScale,
           y: height / 2 - focusFraction.y * nativeContentHeight * nextScale,
         },
-        { syncUi: true }
+        { syncUi: true, commitViewBox: isNative }
       );
     },
-    [getScaleBounds, setTransform]
+    [getScaleBounds, isNative, setTransform]
   );
 
   const handleContainerLayout = useCallback(
@@ -251,9 +325,9 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
       // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
       // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
       // matters here too, since the cover-fit min/max scale is screen-size-dependent.
-      setTransform(transform.current, { syncUi: true });
+      setTransform(transform.current, { syncUi: true, commitViewBox: isNative });
     },
-    [centerOn, initialFocus, initialScale, setTransform]
+    [centerOn, initialFocus, initialScale, isNative, setTransform]
   );
 
   const zoomByStep = useCallback(
@@ -344,8 +418,16 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
         // parent never becomes the responder and pinch never starts.
         onStartShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
           event.nativeEvent.touches.length >= 2,
-        onMoveShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
-          event.nativeEvent.touches.length >= 2,
+        // One-finger drags must capture too: the idle sharp layer's Path onPress handlers
+        // otherwise own the touch and pan never starts.
+        onMoveShouldSetPanResponderCapture: (
+          event: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          if (event.nativeEvent.touches.length >= 2) return true;
+          if (!canPanAtCurrentScale()) return false;
+          return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
+        },
         onMoveShouldSetPanResponder: (
           event: GestureResponderEvent,
           gestureState: PanResponderGestureState
@@ -354,11 +436,16 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           if (!canPanAtCurrentScale()) return false;
           return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
         },
-        onPanResponderGrant: (event: GestureResponderEvent) => {
+        onPanResponderGrant: (event: GestureResponderEvent, gestureState: PanResponderGestureState) => {
           userInteractedRef.current = true;
-          captureGestureStart(event);
+          beginGesture();
+          captureGestureStart(event, gestureState);
         },
         onPanResponderMove: (event: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+          // Native switches to the full-map layer on grant; wait until that paint lands
+          // so we don't apply an absolute transform onto the cropped idle viewBox.
+          if (isNative && !isGesturingRef.current) return;
+
           const touches = event.nativeEvent.touches;
           let start = gestureStartRef.current;
 
@@ -383,14 +470,11 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
             );
             const contentX = (start.pinchMidpoint.x - start.transform.x) / start.transform.scale;
             const contentY = (start.pinchMidpoint.y - start.transform.y) / start.transform.scale;
-            setTransform(
-              {
-                scale: nextScale,
-                x: pinch.midpoint.x - contentX * nextScale,
-                y: pinch.midpoint.y - contentY * nextScale,
-              },
-              { syncUi: true }
-            );
+            setTransform({
+              scale: nextScale,
+              x: pinch.midpoint.x - contentX * nextScale,
+              y: pinch.midpoint.y - contentY * nextScale,
+            });
             return;
           }
 
@@ -407,13 +491,21 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
           });
         },
         onPanResponderRelease: () => {
-          gestureStartRef.current = null;
+          endGesture();
         },
         onPanResponderTerminate: () => {
-          gestureStartRef.current = null;
+          endGesture();
         },
       }),
-    [canPanAtCurrentScale, captureGestureStart, getScaleBounds, setTransform]
+    [
+      beginGesture,
+      canPanAtCurrentScale,
+      captureGestureStart,
+      endGesture,
+      getScaleBounds,
+      isNative,
+      setTransform,
+    ]
   );
 
   const { min: minScale, max: maxScale } = getScaleBounds();
@@ -425,13 +517,36 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
         style={[styles.viewport, Platform.OS === 'web' && webCursorStyle(scaleForUi > minScale + SCALE_EPSILON)]}
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}>
-        <View ref={contentRef} style={styles.content}>
-          <WorldMap
-            visited={visited}
-            onToggle={onToggle}
-            onHoverChange={Platform.OS === 'web' ? handleHoverChange : undefined}
-          />
-        </View>
+        {isNative ? (
+          <>
+            {/* Sharp idle layer: viewBox crop at viewport resolution. */}
+            <View
+              style={[styles.idleLayer, isGesturing && styles.invisible]}
+              pointerEvents={isGesturing ? 'none' : 'auto'}>
+              <WorldMap
+                visited={visited}
+                onToggle={onToggle}
+                fillParent
+                mapViewBox={idleViewBox}
+              />
+            </View>
+            {/* Gesture layer: full map + View transform (always mounted so grant is instant). */}
+            <View
+              ref={contentRef}
+              style={[styles.content, !isGesturing && styles.invisible]}
+              pointerEvents="none">
+              <WorldMap visited={visited} interactive={false} />
+            </View>
+          </>
+        ) : (
+          <View ref={contentRef} style={styles.content}>
+            <WorldMap
+              visited={visited}
+              onToggle={onToggle}
+              onHoverChange={handleHoverChange}
+            />
+          </View>
+        )}
 
         <View
           ref={tooltipRef}
@@ -503,6 +618,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: '100%',
+  },
+  idleLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  invisible: {
+    opacity: 0,
   },
   tooltip: {
     position: 'absolute',
