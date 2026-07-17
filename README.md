@@ -63,6 +63,25 @@ npx expo start
 
 Then press `w` for web, or scan the QR code with [Expo Go](https://expo.dev/go) / open in a simulator for iOS/Android.
 
+## 3. Deploy to Vercel (web / PWA)
+
+The repo is configured for a static Expo web export (`vercel.json` + `public/manifest.json`).
+
+1. Push the project to GitHub and import it in [Vercel](https://vercel.com/new) (or run `npx vercel` from the project root).
+2. In the Vercel project settings, add these environment variables (same values as `.env`):
+   - `EXPO_PUBLIC_SUPABASE_URL`
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+3. Deploy. Build uses `npx expo export -p web` and serves the `dist/` folder.
+4. In Supabase → **Authentication → URL Configuration**, add your Vercel URL to **Site URL** and **Redirect URLs** (e.g. `https://your-app.vercel.app` and `https://your-app.vercel.app/**`).
+5. On iPhone: open the site in **Safari** → Share → **Add to Home Screen**.
+
+Local production build check:
+
+```bash
+npm run build:web
+npx expo serve
+```
+
 ## Project structure
 
 ```

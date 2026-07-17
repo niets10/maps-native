@@ -21,7 +21,12 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Field Atlas",
+      "shortName": "Field Atlas",
+      "description": "Track which countries you've visited on an interactive world map.",
+      "themeColor": "#C1502E",
+      "backgroundColor": "#F6EFE1"
     },
     "plugins": [
       "expo-router",
