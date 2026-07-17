@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopBarInset } from '@/constants/theme';
@@ -37,9 +38,12 @@ export default function ProfileScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + Spacing.five }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <ThemedText type="label" themeColor="accent">
-            Profile
-          </ThemedText>
+          <View style={styles.headerTop}>
+            <ThemedText type="label" themeColor="accent">
+              Profile
+            </ThemedText>
+            <ThemeToggle />
+          </View>
           <ThemedText type="title" style={{ textTransform: 'capitalize' }}>
             {displayName}
           </ThemedText>
@@ -114,6 +118,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     gap: Spacing.one,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   summaryCard: {
     width: '100%',

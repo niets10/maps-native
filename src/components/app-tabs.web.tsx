@@ -1,6 +1,7 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
 import { Pressable, View, StyleSheet } from 'react-native';
 
+import { ThemeToggle } from './theme-toggle';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
@@ -50,6 +51,8 @@ export function CustomTabList(props: TabListProps) {
         </ThemedText>
 
         {props.children}
+
+        <ThemeToggle size={18} />
       </ThemedView>
     </View>
   );
