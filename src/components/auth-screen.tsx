@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -8,25 +8,30 @@ import {
   StyleSheet,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WorldMap } from '@/components/world-map';
-import { Fonts, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { useAuth } from '@/lib/auth-context';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { WorldMap } from "@/components/world-map";
+import { Fonts, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/lib/auth-context";
 
-type Mode = 'sign-in' | 'sign-up';
+type Mode = "sign-in" | "sign-up";
 
 export function AuthScreen() {
   const theme = useTheme();
-  const { signInWithPassword, signUpWithPassword, signInWithMagicLink, signInWithGoogle } = useAuth();
+  const {
+    signInWithPassword,
+    signUpWithPassword,
+    signInWithMagicLink,
+    signInWithGoogle,
+  } = useAuth();
 
-  const [mode, setMode] = useState<Mode>('sign-in');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<Mode>("sign-in");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -38,7 +43,11 @@ export function AuthScreen() {
     try {
       await action();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -46,22 +55,24 @@ export function AuthScreen() {
 
   function handleSubmit() {
     if (!email || !password) {
-      setError('Enter your email and password to continue.');
+      setError("Enter your email and password to continue.");
       return;
     }
     runAction(() =>
-      mode === 'sign-in' ? signInWithPassword(email, password) : signUpWithPassword(email, password)
+      mode === "sign-in"
+        ? signInWithPassword(email, password)
+        : signUpWithPassword(email, password),
     );
   }
 
   function handleMagicLink() {
     if (!email) {
-      setError('Enter your email first.');
+      setError("Enter your email first.");
       return;
     }
     runAction(async () => {
       await signInWithMagicLink(email);
-      setNotice('Check your inbox for a sign-in link.');
+      setNotice("Check your inbox for a sign-in link.");
     });
   }
 
@@ -75,17 +86,19 @@ export function AuthScreen() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.flexOne}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <ScrollView
             contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled">
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.content}>
               <View style={styles.heroBlock}>
                 <ThemedText type="label" themeColor="accent">
                   Field Atlas
                 </ThemedText>
                 <ThemedText type="display" style={styles.headline}>
-                  Every border{'\n'}you&apos;ve crossed.
+                  Every border{"\n"}you&apos;ve crossed.
                 </ThemedText>
                 <ThemedText themeColor="textSecondary" style={styles.subhead}>
                   Sign in to keep your travel map in sync across every device.
@@ -93,11 +106,15 @@ export function AuthScreen() {
               </View>
 
               <View style={styles.modeSwitch}>
-                <ModeButton label="Sign in" active={mode === 'sign-in'} onPress={() => setMode('sign-in')} />
+                <ModeButton
+                  label="Sign in"
+                  active={mode === "sign-in"}
+                  onPress={() => setMode("sign-in")}
+                />
                 <ModeButton
                   label="Create account"
-                  active={mode === 'sign-up'}
-                  onPress={() => setMode('sign-up')}
+                  active={mode === "sign-up"}
+                  onPress={() => setMode("sign-up")}
                 />
               </View>
 
@@ -138,22 +155,29 @@ export function AuthScreen() {
                     styles.primaryButton,
                     { backgroundColor: theme.accent },
                     pressed && styles.pressed,
-                  ]}>
+                  ]}
+                >
                   {isSubmitting ? (
                     <ActivityIndicator color={theme.onAccent} />
                   ) : (
                     <ThemedText type="smallBold" themeColor="onAccent">
-                      {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+                      {mode === "sign-in" ? "Sign in" : "Create account"}
                     </ThemedText>
                   )}
                 </Pressable>
 
-                <Pressable onPress={handleMagicLink} disabled={isSubmitting} style={styles.linkRow}>
-                  <ThemedText type="linkPrimary">Email me a sign-in link instead</ThemedText>
+                <Pressable
+                  onPress={handleMagicLink}
+                  disabled={isSubmitting}
+                  style={styles.linkRow}
+                >
+                  <ThemedText type="linkPrimary">
+                    Email me a sign-in link instead
+                  </ThemedText>
                 </Pressable>
               </View>
 
-              <View style={styles.dividerRow}>
+              {/* <View style={styles.dividerRow}>
                 <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
                 <ThemedText type="label" themeColor="textSecondary">
                   or
@@ -170,7 +194,7 @@ export function AuthScreen() {
                   pressed && styles.pressed,
                 ]}>
                 <ThemedText type="smallBold">Continue with Google</ThemedText>
-              </Pressable>
+              </Pressable> */}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -191,17 +215,25 @@ function ModeButton({
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} style={styles.modeButton}>
-      <ThemedText type="smallBold" themeColor={active ? 'text' : 'textSecondary'}>
+      <ThemedText
+        type="smallBold"
+        themeColor={active ? "text" : "textSecondary"}
+      >
         {label}
       </ThemedText>
       <View
-        style={[styles.modeUnderline, { backgroundColor: active ? theme.accent : 'transparent' }]}
+        style={[
+          styles.modeUnderline,
+          { backgroundColor: active ? theme.accent : "transparent" },
+        ]}
       />
     </Pressable>
   );
 }
 
-function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
+function Field(
+  props: React.ComponentProps<typeof TextInput> & { label: string },
+) {
   const theme = useTheme();
   const { label, style, ...rest } = props;
   return (
@@ -213,7 +245,11 @@ function Field(props: React.ComponentProps<typeof TextInput> & { label: string }
         placeholderTextColor={theme.textSecondary}
         style={[
           styles.input,
-          { color: theme.text, borderBottomColor: theme.border, fontFamily: Fonts.body },
+          {
+            color: theme.text,
+            borderBottomColor: theme.border,
+            fontFamily: Fonts.body,
+          },
           style,
         ]}
         {...rest}
@@ -234,12 +270,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.six,
   },
   content: {
-    width: '100%',
+    width: "100%",
     maxWidth: 440,
     gap: Spacing.five,
   },
@@ -254,7 +290,7 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   modeSwitch: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.five,
   },
   modeButton: {
@@ -280,19 +316,19 @@ const styles = StyleSheet.create({
   primaryButton: {
     borderRadius: Spacing.five,
     paddingVertical: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   pressed: {
     opacity: 0.8,
   },
   linkRow: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: -Spacing.two,
   },
   dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.three,
   },
   dividerLine: {
@@ -303,7 +339,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Spacing.five,
     paddingVertical: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
