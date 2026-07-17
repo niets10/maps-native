@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,17 +44,29 @@ export default function CountriesScreen() {
             Countries
           </ThemedText>
           <ThemedText type="title">Where next?</ThemedText>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search countries..."
-            placeholderTextColor={theme.textSecondary}
-            autoCapitalize="none"
-            style={[
-              styles.searchInput,
-              { color: theme.text, borderColor: theme.border, fontFamily: Fonts.body },
-            ]}
-          />
+          <View style={styles.searchWrap}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search countries..."
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              style={[
+                styles.searchInput,
+                { color: theme.text, borderColor: theme.border, fontFamily: Fonts.body },
+              ]}
+            />
+            {query.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                hitSlop={Spacing.two}
+                onPress={() => setQuery('')}
+                style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}>
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <SectionList
@@ -124,12 +137,25 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.four + TopBarInset,
     paddingBottom: Spacing.three,
   },
+  searchWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
   searchInput: {
     fontSize: 16,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.three + 24,
     borderWidth: 1,
     borderRadius: Spacing.five,
+  },
+  clearButton: {
+    position: 'absolute',
+    right: Spacing.three,
+    padding: Spacing.half,
+  },
+  clearButtonPressed: {
+    opacity: 0.6,
   },
   sectionHeader: {
     flexDirection: 'row',
