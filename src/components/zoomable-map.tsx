@@ -529,7 +529,14 @@ export function ZoomableMap({
     <View style={styles.wrapper}>
       <View
         ref={setContainerRef}
-        style={[styles.viewport, Platform.OS === 'web' && webCursorStyle(scaleForUi > minScale + SCALE_EPSILON)]}
+        style={[
+          styles.viewport,
+          Platform.OS === 'web' &&
+            (webCursorStyle({
+              canPan: scaleForUi > minScale + SCALE_EPSILON,
+              isHoveringCountry: Boolean(hoveredCode),
+            }) as unknown as Record<string, unknown>),
+        ]}
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}>
         {isNative ? (
@@ -615,8 +622,16 @@ export function ZoomableMap({
 
 // `cursor` isn't part of RN's ViewStyle typings, but react-native-web passes it straight
 // through to the underlying `<div>`, so it's a harmless no-op on native.
-function webCursorStyle(canPan: boolean) {
-  return { cursor: canPan ? 'grab' : 'default' } as unknown as Record<string, unknown>;
+function webCursorStyle ({
+  canPan,
+  isHoveringCountry,
+}: {
+  canPan: boolean;
+  isHoveringCountry: boolean;
+}) {
+  if (isHoveringCountry) return { cursor: 'pointer' };
+  if (canPan) return { cursor: 'grab' };
+  return { cursor: 'default' };
 }
 
 const styles = StyleSheet.create({
