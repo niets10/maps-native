@@ -328,8 +328,13 @@ export function ZoomableMap({
       containerRef.current?.measureInWindow((x, y) => {
         containerPageOrigin.current = { x, y };
       });
-      if (!userInteractedRef.current && initialFocus) {
-        centerOn(initialFocus, initialScale);
+      if (!userInteractedRef.current) {
+        const { min } = getScaleBounds();
+        if (initialFocus) {
+          centerOn(initialFocus, initialScale);
+        } else {
+          centerOn({ x: 0.5, y: 0.5 }, min);
+        }
         return;
       }
       // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
@@ -337,7 +342,7 @@ export function ZoomableMap({
       // matters here too, since the cover-fit min/max scale is screen-size-dependent.
       setTransform(transform.current, { syncUi: true, commitViewBox: isNative });
     },
-    [centerOn, initialFocus, initialScale, isNative, setTransform]
+    [centerOn, getScaleBounds, initialFocus, initialScale, isNative, setTransform]
   );
 
   const zoomByStep = useCallback(

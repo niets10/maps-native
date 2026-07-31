@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -6,15 +6,11 @@ import { CountryInfoModal } from '@/components/country-info-modal';
 import { GlassSurface } from '@/components/glass-surface';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { getCountryFocusFraction } from '@/components/world-map';
 import { ZoomableMap } from '@/components/zoomable-map';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useVisitedCountries } from '@/lib/use-visited-countries';
 import { computeTravelStats } from '@/lib/stats';
-
-const FOCUS_COUNTRY_CODE = 'es';
-const FOCUS_SCALE = 2;
 
 export default function MapScreen () {
   const theme = useTheme();
@@ -23,8 +19,6 @@ export default function MapScreen () {
   const stats = computeTravelStats(visited);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
-  const focusFraction = useMemo(() => getCountryFocusFraction(FOCUS_COUNTRY_CODE), []);
-
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       {isLoading ? (
@@ -32,12 +26,7 @@ export default function MapScreen () {
           <ActivityIndicator />
         </View>
       ) : (
-        <ZoomableMap
-          visited={visited}
-          onCountryPress={setSelectedCode}
-          initialFocus={focusFraction}
-          initialScale={FOCUS_SCALE}
-        />
+        <ZoomableMap visited={visited} onCountryPress={setSelectedCode} />
       )}
 
       <GlassSurface
