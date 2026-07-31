@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,29 +12,54 @@ import { useTheme } from '@/hooks/use-theme';
 import { useVisitedCountries } from '@/lib/use-visited-countries';
 import { flagEmoji } from '@/lib/utils';
 
-type Section = { title: string; data: Country[]; visitedCount: number; totalCount: number };
+type Section = {
+  title: string;
+  data: Country[];
+  visitedCount: number;
+  totalCount: number;
+  matchCount: number;
+};
 
 export default function CountriesScreen() {
   const theme = useTheme();
   const { visited, notesByCountry, saveCountry } = useVisitedCountries();
   const [query, setQuery] = useState('');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [collapsedContinents, setCollapsedContinents] = useState<Set<string>>(() => new Set());
+
+  const toggleContinent = useCallback((title: string) => {
+    setCollapsedContinents((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  }, []);
 
   const sections = useMemo<Section[]>(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const isSearching = normalizedQuery.length > 0;
     return CONTINENTS.map((continent) => {
       const countriesInContinent = COUNTRIES.filter((c) => c.continent === continent);
-      const data = normalizedQuery
+      const matchingCountries = normalizedQuery
         ? countriesInContinent.filter((c) => c.name.toLowerCase().includes(normalizedQuery))
         : countriesInContinent;
+      const isCollapsed = !isSearching && collapsedContinents.has(continent);
       return {
         title: continent,
-        data,
+        data: isCollapsed ? [] : matchingCountries,
+        matchCount: matchingCountries.length,
         visitedCount: countriesInContinent.filter((c) => visited.has(c.code)).length,
         totalCount: countriesInContinent.length,
       };
-    }).filter((section) => section.data.length > 0);
-  }, [query, visited]);
+    }).filter(
+      (section) =>
+        section.matchCount > 0 || (!isSearching && collapsedContinents.has(section.title))
+    );
+  }, [query, visited, collapsedContinents]);
 
   return (
     <SafeAreaView
@@ -76,18 +101,36 @@ export default function CountriesScreen() {
           keyExtractor={(item) => item.code}
           contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.five }}
           stickySectionHeadersEnabled
-          renderSectionHeader={({ section }) => (
-            <ThemedView type="backgroundElement" style={styles.sectionHeader}>
-              <ThemedText type="label" themeColor="textSecondary">
-                {section.title}
-              </ThemedText>
-              <ThemedView type="accentSoft" style={styles.sectionCount}>
-                <ThemedText type="smallBold" themeColor="accent">
-                  {section.visitedCount}/{section.totalCount}
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
-          )}
+          extraData={collapsedContinents}
+          renderSectionHeader={({ section }) => {
+            const isCollapsed = collapsedContinents.has(section.title);
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${section.title}, ${section.visitedCount} of ${section.totalCount} visited`}
+                accessibilityState={{ expanded: !isCollapsed }}
+                onPress={() => toggleContinent(section.title)}
+                style={({ pressed }) => [pressed && styles.sectionHeaderPressed]}>
+                <ThemedView type="backgroundElement" style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderLeading}>
+                    <Ionicons
+                      name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
+                      size={16}
+                      color={theme.textSecondary}
+                    />
+                    <ThemedText type="label" themeColor="textSecondary">
+                      {section.title}
+                    </ThemedText>
+                  </View>
+                  <ThemedView type="accentSoft" style={styles.sectionCount}>
+                    <ThemedText type="smallBold" themeColor="accent">
+                      {section.visitedCount}/{section.totalCount}
+                    </ThemedText>
+                  </ThemedView>
+                </ThemedView>
+              </Pressable>
+            );
+          }}
           renderItem={({ item }) => {
             const isVisited = visited.has(item.code);
             return (
@@ -167,6 +210,9 @@ const styles = StyleSheet.create({
   clearButtonPressed: {
     opacity: 0.6,
   },
+  sectionHeaderPressed: {
+    opacity: 0.7,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -176,6 +222,11 @@ const styles = StyleSheet.create({
     marginTop: Spacing.three,
     marginBottom: Spacing.two,
     borderRadius: Spacing.three,
+  },
+  sectionHeaderLeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   sectionCount: {
     paddingHorizontal: Spacing.two,
