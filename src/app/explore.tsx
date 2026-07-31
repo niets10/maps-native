@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CountryInfoModal } from '@/components/country-info-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CONTINENTS, COUNTRIES, type Country } from '@/constants/countries';
@@ -15,8 +16,9 @@ type Section = { title: string; data: Country[]; visitedCount: number; totalCoun
 
 export default function CountriesScreen() {
   const theme = useTheme();
-  const { visited, toggle } = useVisitedCountries();
+  const { visited, notesByCountry, saveCountry } = useVisitedCountries();
   const [query, setQuery] = useState('');
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   const sections = useMemo<Section[]>(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -90,7 +92,7 @@ export default function CountriesScreen() {
             const isVisited = visited.has(item.code);
             return (
               <Pressable
-                onPress={() => toggle(item.code)}
+                onPress={() => setSelectedCode(item.code)}
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
                 <ThemedView
                   type={isVisited ? 'accentSoft' : 'backgroundElement'}
@@ -117,6 +119,14 @@ export default function CountriesScreen() {
           }}
         />
       </View>
+
+      <CountryInfoModal
+        countryCode={selectedCode}
+        isVisited={selectedCode ? visited.has(selectedCode) : false}
+        initialNotes={selectedCode ? notesByCountry.get(selectedCode) ?? '' : ''}
+        onClose={() => setSelectedCode(null)}
+        onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
+      />
     </SafeAreaView>
   );
 }
