@@ -22,6 +22,7 @@ import {
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { GlassColors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSupportsHover } from '@/hooks/use-supports-hover';
 import { useTheme } from '@/hooks/use-theme';
 import { flagEmoji } from '@/lib/utils';
 
@@ -113,6 +114,8 @@ export function ZoomableMap({
   const scheme = useColorScheme() ?? 'light';
   const glass = GlassColors[scheme];
   const isNative = Platform.OS !== 'web';
+  const supportsHover = useSupportsHover();
+  const showHoverTooltip = Platform.OS === 'web' && supportsHover;
 
   const containerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
@@ -581,7 +584,7 @@ export function ZoomableMap({
             visited={visited}
             onToggle={onToggle}
             onCountryPress={onCountryPress}
-            onHoverChange={Platform.OS === 'web' ? handleHoverChange : undefined}
+            onHoverChange={showHoverTooltip ? handleHoverChange : undefined}
             fillParent
             mapViewBox={idleViewBox}
           />
@@ -594,24 +597,26 @@ export function ZoomableMap({
           <WorldMap visited={visited} interactive={false} />
         </View>
 
-        <View
-          ref={tooltipRef}
-          pointerEvents="none"
-          style={[
-            styles.tooltip,
-            {
-              backgroundColor: theme.backgroundElement,
-              borderColor: theme.border,
-              display: hoveredCode ? 'flex' : 'none',
-            },
-          ]}>
-          {hoveredCode ? (
-            <>
-              <ThemedText style={styles.tooltipFlag}>{flagEmoji(hoveredCode)}</ThemedText>
-              <ThemedText type="smallBold">{COUNTRIES_BY_CODE[hoveredCode]?.name}</ThemedText>
-            </>
-          ) : null}
-        </View>
+        {showHoverTooltip ? (
+          <View
+            ref={tooltipRef}
+            pointerEvents="none"
+            style={[
+              styles.tooltip,
+              {
+                backgroundColor: theme.backgroundElement,
+                borderColor: theme.border,
+                display: hoveredCode ? 'flex' : 'none',
+              },
+            ]}>
+            {hoveredCode ? (
+              <>
+                <ThemedText style={styles.tooltipFlag}>{flagEmoji(hoveredCode)}</ThemedText>
+                <ThemedText type="smallBold">{COUNTRIES_BY_CODE[hoveredCode]?.name}</ThemedText>
+              </>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.zoomControls}>
