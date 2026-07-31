@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { AuthGate } from '@/components/auth-gate';
+import { WebPageTitle } from '@/components/web-page-title';
 import { AuthProvider } from '@/lib/auth-context';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { VisitedCountriesProvider } from '@/lib/use-visited-countries';
@@ -43,7 +44,9 @@ function RootNavigator () {
   const { colorScheme } = useThemePreference();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <>
+      <WebPageTitle />
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <AnimatedSplashOverlay />
       <AuthProvider>
@@ -54,5 +57,6 @@ function RootNavigator () {
         </AuthGate>
       </AuthProvider>
     </ThemeProvider>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { WebPageTitle } from '@/components/web-page-title';
 import { CountryInfoModal } from '@/components/country-info-modal';
 import { GlassSurface } from '@/components/glass-surface';
 import { ThemedText } from '@/components/themed-text';
@@ -20,7 +21,9 @@ export default function MapScreen () {
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
+    <>
+      <WebPageTitle />
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
       {isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator />
@@ -59,6 +62,7 @@ export default function MapScreen () {
         onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
       />
     </View>
+    </>
   );
 }
 

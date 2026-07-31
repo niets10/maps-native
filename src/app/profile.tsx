@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { WebPageTitle } from "@/components/web-page-title";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import {
@@ -43,7 +44,9 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView
+    <>
+      <WebPageTitle />
+      <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
       edges={["top", "left", "right"]}
     >
@@ -125,6 +128,7 @@ export default function ProfileScreen() {
         </Pressable>
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 

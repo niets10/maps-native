@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { WebPageTitle } from '@/components/web-page-title';
 import { CountryInfoModal } from '@/components/country-info-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -62,7 +63,9 @@ export default function CountriesScreen() {
   }, [query, visited, collapsedContinents]);
 
   return (
-    <SafeAreaView
+    <>
+      <WebPageTitle />
+      <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
       edges={['top', 'left', 'right']}>
       <View style={styles.centerColumn}>
@@ -172,6 +175,7 @@ export default function CountriesScreen() {
         onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
       />
     </SafeAreaView>
+    </>
   );
 }
 
