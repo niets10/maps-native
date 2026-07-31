@@ -27,8 +27,8 @@ import { flagEmoji } from '@/lib/utils';
 
 /** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
 const MIN_SCALE_FLOOR = 1;
-/** How far beyond "cover" (the scale at which the map's shorter dimension exactly fills
- * the viewport, eliminating letterboxing) the user can still zoom in. */
+/** How far beyond "contain" (the scale at which the entire map fits in the viewport)
+ * the user can still zoom in. */
 const MAX_ZOOM_MULTIPLIER = 4;
 /** Tolerance for comparing the live scale against the (screen-size-dependent) min/max
  * bounds when deciding whether to disable the zoom buttons. */
@@ -188,18 +188,16 @@ export function ZoomableMap({
 
   // The content layer is always exactly as wide as the viewport (see `content`'s style),
   // so its native (unscaled) height is derived purely from the map artwork's own aspect
-  // ratio -- which, on a tall phone screen, is usually shorter than the viewport itself.
-  // "Cover" (never zoom out past the scale where the map's height reaches the viewport's)
-  // is therefore the effective minimum, so the map always fills the viewport with no
-  // empty bands above/below, the same way a real map app behaves.
+  // ratio. "Contain" keeps the whole map visible at minimum zoom (letterboxing if needed);
+  // panning only unlocks once the user zooms in past that fit.
   const getScaleBounds = useCallback((): { min: number; max: number } => {
     const { width, height } = containerSize.current;
     if (width === 0 || height === 0) {
       return { min: MIN_SCALE_FLOOR, max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER };
     }
     const nativeContentHeight = width / MAP_ASPECT_RATIO;
-    const coverScale = Math.max(MIN_SCALE_FLOOR, height / nativeContentHeight);
-    return { min: coverScale, max: coverScale * MAX_ZOOM_MULTIPLIER };
+    const containScale = Math.min(MIN_SCALE_FLOOR, height / nativeContentHeight);
+    return { min: containScale, max: containScale * MAX_ZOOM_MULTIPLIER };
   }, []);
 
   const clampTransform = useCallback(
@@ -208,9 +206,19 @@ export function ZoomableMap({
       const { min, max } = getScaleBounds();
       const nextScale = clamp(scale, min, max);
       const nativeContentHeight = width / MAP_ASPECT_RATIO;
-      const minX = width * (1 - nextScale);
-      const minY = height - nativeContentHeight * nextScale;
-      return { scale: nextScale, x: clamp(x, minX, 0), y: clamp(y, minY, 0) };
+      const scaledWidth = width * nextScale;
+      const scaledHeight = nativeContentHeight * nextScale;
+
+      const minX = scaledWidth <= width ? 0 : width - scaledWidth;
+      const maxX = scaledWidth <= width ? width - scaledWidth : 0;
+      const minY = scaledHeight <= height ? 0 : height - scaledHeight;
+      const maxY = scaledHeight <= height ? height - scaledHeight : 0;
+
+      return {
+        scale: nextScale,
+        x: clamp(x, minX, maxX),
+        y: clamp(y, minY, maxY),
+      };
     },
     [getScaleBounds]
   );
@@ -339,7 +347,7 @@ export function ZoomableMap({
       }
       // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
       // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
-      // matters here too, since the cover-fit min/max scale is screen-size-dependent.
+      // matters here too, since the contain-fit min/max scale is screen-size-dependent.
       setTransform(transform.current, { syncUi: true, commitViewBox: isNative });
     },
     [centerOn, getScaleBounds, initialFocus, initialScale, isNative, setTransform]
@@ -397,9 +405,9 @@ export function ZoomableMap({
     if (width === 0 || height === 0) return false;
     const { scale } = transform.current;
     const contentHeight = width / MAP_ASPECT_RATIO;
-    // Allow drag whenever the map overflows the viewport on either axis -- including
-    // the cover-fit minimum on tall phones, where the map is wider than the screen.
-    return width * scale > width + 0.5 || contentHeight * scale > height + 0.5;
+    const scaledWidth = width * scale;
+    const scaledHeight = contentHeight * scale;
+    return scaledWidth > width + 0.5 || scaledHeight > height + 0.5;
   }, []);
 
   const captureGestureStart = useCallback((
