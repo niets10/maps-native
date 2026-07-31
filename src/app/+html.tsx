@@ -13,7 +13,7 @@ export default function Root ({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no, viewport-fit=cover"
         />
         <meta name="theme-color" content="#C1502E" />
         <meta name="description" content="Track which countries you've visited on an interactive world map." />
