@@ -40,6 +40,39 @@ A cross-platform (iOS, Android, web) app for tracking which countries you've vis
 
 If these aren't set, the app will show a "Connect your Supabase project" setup screen instead of crashing.
 
+### User profiles (`auth.users` vs `public.profiles`)
+
+Supabase Auth and this app use **two linked tables** for user data:
+
+| Table | Schema | Origin | Used for |
+| ----- | ------ | ------ | -------- |
+| `users` | `auth` | Built-in Supabase Auth | Login, sessions, email, auth metadata |
+| `profiles` | `public` | Custom (see `supabase/schema.sql`) | Display name and future profile fields |
+
+They share the same user `id`. On sign-up, a database trigger copies the name from auth metadata into `public.profiles`:
+
+1. The app sends the name as `full_name` in sign-up metadata (`src/lib/auth-context.tsx`).
+2. The `handle_new_user` trigger inserts a `profiles` row with `display_name` from that metadata (or the email prefix as a fallback).
+3. The profile screen reads `profiles.display_name` via `src/lib/use-profile.tsx`.
+
+**Important:** The app treats `public.profiles.display_name` as the source of truth for what users see. The **Authentication → Users** page in the Supabase dashboard shows auth metadata (`raw_user_meta_data`), not `public.profiles` — so Display Name there can be blank even when `profiles.display_name` is correct. To change a user's visible name, update `public.profiles` (or add in-app profile editing later).
+
+```sql
+-- Check both stores for a user
+select
+  u.email,
+  u.raw_user_meta_data ->> 'full_name' as auth_full_name,
+  p.display_name
+from auth.users u
+left join public.profiles p on p.id = u.id
+where u.email = 'user@example.com';
+
+-- Update the name shown in the app
+update public.profiles
+set display_name = 'Jane'
+where id = (select id from auth.users where email = 'user@example.com');
+```
+
 ### Enable email auth
 
 Email/password and magic links work out of the box once your project exists — no extra config needed. By default Supabase requires email confirmation for new sign-ups; you can toggle that under **Authentication -> Providers -> Email** while developing.
@@ -99,6 +132,7 @@ src/
   lib/
     supabase.ts           Supabase client (cross-platform storage)
     auth-context.tsx      Session state + sign-in/up/out methods
+    use-profile.tsx       Fetch display name from public.profiles
     use-visited-countries.ts  Data hook — fetch/toggle visited countries
     stats.ts              Per-continent stats calculation
   constants/

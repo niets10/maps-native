@@ -19,17 +19,19 @@ import {
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth-context";
 import { computeTravelStats } from "@/lib/stats";
+import { useProfile } from "@/lib/use-profile";
 import { useVisitedCountries } from "@/lib/use-visited-countries";
 
 export default function ProfileScreen() {
   const theme = useTheme();
   const { session, signOut } = useAuth();
+  const { displayName: profileName } = useProfile();
   const { visited } = useVisitedCountries();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const stats = computeTravelStats(visited);
   const email = session?.user.email ?? "";
-  const displayName = email.split("@")[0] || "Traveler";
+  const displayName = profileName?.trim() || email.split("@")[0] || "Traveler";
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -58,7 +60,7 @@ export default function ProfileScreen() {
               Profile
             </ThemedText>
           </View>
-          <ThemedText type="title" style={{ textTransform: "capitalize" }}>
+          <ThemedText type="title">
             {displayName}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">

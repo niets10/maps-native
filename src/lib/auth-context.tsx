@@ -12,7 +12,7 @@ type AuthContextValue = {
   session: Session | null;
   isLoading: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
-  signUpWithPassword: (email: string, password: string) => Promise<void>;
+  signUpWithPassword: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -93,12 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
-      async signUpWithPassword(email, password) {
+      async signUpWithPassword(email, password, displayName) {
         assertConfigured();
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: getRedirectUrl() },
+          options: {
+            emailRedirectTo: getRedirectUrl(),
+            data: { full_name: displayName.trim() },
+          },
         });
         if (error) throw error;
       },

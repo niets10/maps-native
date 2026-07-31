@@ -30,6 +30,7 @@ export function AuthScreen() {
   } = useAuth();
 
   const [mode, setMode] = useState<Mode>("sign-in");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,10 +59,14 @@ export function AuthScreen() {
       setError("Enter your email and password to continue.");
       return;
     }
+    if (mode === "sign-up" && !name.trim()) {
+      setError("Enter your name to continue.");
+      return;
+    }
     runAction(() =>
       mode === "sign-in"
         ? signInWithPassword(email, password)
-        : signUpWithPassword(email, password),
+        : signUpWithPassword(email, password, name),
     );
   }
 
@@ -119,6 +124,16 @@ export function AuthScreen() {
               </View>
 
               <View style={styles.form}>
+                {mode === "sign-up" ? (
+                  <Field
+                    label="Name"
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="words"
+                    autoComplete="name"
+                    textContentType="name"
+                  />
+                ) : null}
                 <Field
                   label="Email"
                   value={email}
