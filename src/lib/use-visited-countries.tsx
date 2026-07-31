@@ -11,16 +11,19 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 
-type VisitedRow = { country_code: string };
+type VisitedRow = { country_code: string; notes: string | null };
 
 type VisitedCountriesValue = {
   visited: Set<string>;
+  notesByCountry: Map<string, string>;
   isLoading: boolean;
   error: string | null;
   toggle: (countryCode: string) => Promise<void>;
+  saveCountry: (countryCode: string, options: { isVisited: boolean; notes: string }) => Promise<void>;
 };
 
 const EMPTY_VISITED: Set<string> = new Set();
+const EMPTY_NOTES: Map<string, string> = new Map();
 
 const VisitedCountriesContext = createContext<VisitedCountriesValue | undefined>(undefined);
 
@@ -35,6 +38,7 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
   const userId = session?.user.id;
 
   const [visited, setVisited] = useState<Set<string>>(EMPTY_VISITED);
+  const [notesByCountry, setNotesByCountry] = useState<Map<string, string>>(EMPTY_NOTES);
   const [loadedForUserId, setLoadedForUserId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,14 +49,18 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
 
     supabase
       .from('visited_countries')
-      .select('country_code')
+      .select('country_code, notes')
       .eq('user_id', userId)
       .then(({ data, error: fetchError }) => {
         if (!isMounted) return;
         if (fetchError) {
           setError(fetchError.message);
         } else {
-          setVisited(new Set((data as VisitedRow[]).map((row) => row.country_code)));
+          const rows = data as VisitedRow[];
+          setVisited(new Set(rows.map((row) => row.country_code)));
+          setNotesByCountry(
+            new Map(rows.filter((row) => row.notes).map((row) => [row.country_code, row.notes!]))
+          );
         }
         setLoadedForUserId(userId);
       });
@@ -69,6 +77,17 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
               next.delete((payload.old as VisitedRow).country_code);
             } else {
               next.add((payload.new as VisitedRow).country_code);
+            }
+            return next;
+          });
+          setNotesByCountry((current) => {
+            const next = new Map(current);
+            if (payload.eventType === 'DELETE') {
+              next.delete((payload.old as VisitedRow).country_code);
+            } else {
+              const row = payload.new as VisitedRow;
+              if (row.notes) next.set(row.country_code, row.notes);
+              else next.delete(row.country_code);
             }
             return next;
           });
@@ -93,6 +112,13 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
         else next.add(countryCode);
         return next;
       });
+      if (isVisited) {
+        setNotesByCountry((current) => {
+          const next = new Map(current);
+          next.delete(countryCode);
+          return next;
+        });
+      }
 
       const result = isVisited
         ? await supabase
@@ -117,10 +143,82 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
     [userId, visited]
   );
 
+  const saveCountry = useCallback(
+    async (countryCode: string, { isVisited, notes }: { isVisited: boolean; notes: string }) => {
+      if (!userId) return;
+      const wasVisited = visited.has(countryCode);
+      const previousNotes = notesByCountry.get(countryCode);
+      const trimmedNotes = notes.trim();
+
+      setVisited((current) => {
+        const next = new Set(current);
+        if (isVisited) next.add(countryCode);
+        else next.delete(countryCode);
+        return next;
+      });
+      setNotesByCountry((current) => {
+        const next = new Map(current);
+        if (isVisited && trimmedNotes) next.set(countryCode, trimmedNotes);
+        else next.delete(countryCode);
+        return next;
+      });
+
+      const result = isVisited
+        ? await supabase.from('visited_countries').upsert(
+            {
+              user_id: userId,
+              country_code: countryCode,
+              notes: trimmedNotes || null,
+            },
+            { onConflict: 'user_id,country_code' }
+          )
+        : wasVisited
+          ? await supabase
+              .from('visited_countries')
+              .delete()
+              .eq('user_id', userId)
+              .eq('country_code', countryCode)
+          : { error: null };
+
+      if (result.error) {
+        setError(result.error.message);
+        setVisited((current) => {
+          const next = new Set(current);
+          if (wasVisited) next.add(countryCode);
+          else next.delete(countryCode);
+          return next;
+        });
+        setNotesByCountry((current) => {
+          const next = new Map(current);
+          if (wasVisited && previousNotes) next.set(countryCode, previousNotes);
+          else next.delete(countryCode);
+          return next;
+        });
+      }
+    },
+    [userId, visited, notesByCountry]
+  );
+
   const value = useMemo<VisitedCountriesValue>(() => {
-    if (!userId) return { visited: EMPTY_VISITED, isLoading: false, error, toggle };
-    return { visited, isLoading: loadedForUserId !== userId, error, toggle };
-  }, [userId, visited, loadedForUserId, error, toggle]);
+    if (!userId) {
+      return {
+        visited: EMPTY_VISITED,
+        notesByCountry: EMPTY_NOTES,
+        isLoading: false,
+        error,
+        toggle,
+        saveCountry,
+      };
+    }
+    return {
+      visited,
+      notesByCountry,
+      isLoading: loadedForUserId !== userId,
+      error,
+      toggle,
+      saveCountry,
+    };
+  }, [userId, visited, notesByCountry, loadedForUserId, error, toggle, saveCountry]);
 
   return <VisitedCountriesContext.Provider value={value}>{children}</VisitedCountriesContext.Provider>;
 }

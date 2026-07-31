@@ -94,13 +94,20 @@ function getPinchFromPageTouches(
 type ZoomableMapProps = {
   visited: Set<string>;
   onToggle?: (countryCode: string) => void;
+  onCountryPress?: (countryCode: string) => void;
   /** Fraction (0-1 on each axis) of the map to center on when it first mounts. */
   initialFocus?: Point | null;
   /** Zoom level to start at when centering on `initialFocus`. */
   initialScale?: number;
 };
 
-export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 }: ZoomableMapProps) {
+export function ZoomableMap({
+  visited,
+  onToggle,
+  onCountryPress,
+  initialFocus,
+  initialScale = 1,
+}: ZoomableMapProps) {
   const theme = useTheme();
   const isNative = Platform.OS !== 'web';
 
@@ -526,6 +533,7 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
               <WorldMap
                 visited={visited}
                 onToggle={onToggle}
+                onCountryPress={onCountryPress}
                 fillParent
                 mapViewBox={idleViewBox}
               />
@@ -543,6 +551,7 @@ export function ZoomableMap({ visited, onToggle, initialFocus, initialScale = 1 
             <WorldMap
               visited={visited}
               onToggle={onToggle}
+              onCountryPress={onCountryPress}
               onHoverChange={handleHoverChange}
             />
           </View>

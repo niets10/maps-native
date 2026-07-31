@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CountryInfoModal } from '@/components/country-info-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { getCountryFocusFraction } from '@/components/world-map';
@@ -16,8 +17,9 @@ const FOCUS_SCALE = 2;
 
 export default function MapScreen() {
   const theme = useTheme();
-  const { visited, isLoading, toggle } = useVisitedCountries();
+  const { visited, notesByCountry, isLoading, saveCountry } = useVisitedCountries();
   const stats = computeTravelStats(visited);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   const focusFraction = useMemo(() => getCountryFocusFraction(FOCUS_COUNTRY_CODE), []);
 
@@ -50,17 +52,25 @@ export default function MapScreen() {
         ) : (
           <ThemedView type="backgroundElement" style={styles.mapCard}>
             <ThemedText type="small" themeColor="textSecondary" style={styles.mapHint}>
-              Tap a country to mark it as visited. Drag to pan, scroll or pinch to zoom.
+              Tap a country to add notes. Drag to pan, scroll or pinch to zoom.
             </ThemedText>
             <ZoomableMap
               visited={visited}
-              onToggle={toggle}
+              onCountryPress={setSelectedCode}
               initialFocus={focusFraction}
               initialScale={FOCUS_SCALE}
             />
           </ThemedView>
         )}
       </View>
+
+      <CountryInfoModal
+        countryCode={selectedCode}
+        isVisited={selectedCode ? visited.has(selectedCode) : false}
+        initialNotes={selectedCode ? notesByCountry.get(selectedCode) ?? '' : ''}
+        onClose={() => setSelectedCode(null)}
+        onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
+      />
     </SafeAreaView>
   );
 }

@@ -10,6 +10,8 @@ import { getBoundingBoxCenter, getLargestSubpathBoundingBox } from '@/lib/svg-pa
 type WorldMapProps = {
   visited: Set<string>;
   onToggle?: (countryCode: string) => void;
+  /** Opens a country detail modal instead of toggling visited state directly. */
+  onCountryPress?: (countryCode: string) => void;
   interactive?: boolean;
   /** Renders the whole map as a flat, low-opacity watermark (used on the auth screen). */
   watermark?: boolean;
@@ -66,6 +68,7 @@ export function getCountryFocusFraction(countryCode: string): { x: number; y: nu
 export const WorldMap = memo(function WorldMap({
   visited,
   onToggle,
+  onCountryPress,
   interactive = true,
   watermark = false,
   fillParent = false,
@@ -108,8 +111,11 @@ export const WorldMap = memo(function WorldMap({
         preserveAspectRatio={fillParent ? 'none' : 'xMidYMid meet'}>
         {locations.map((location) => {
           const info = fills.get(location.id)!;
-          const canPress = interactive && !watermark && info.isCountry && onToggle;
-          const handlePress = canPress ? () => onToggle!(location.id) : undefined;
+          const canPress =
+            interactive && !watermark && info.isCountry && (onCountryPress || onToggle);
+          const handlePress = canPress
+            ? () => (onCountryPress ? onCountryPress(location.id) : onToggle!(location.id))
+            : undefined;
           // react-native-svg's onPress mixes in a legacy Touchable responder handler that
           // react-native-web forwards straight to the DOM <path>, logging "Unknown event
           // handler property" warnings, so we use onClick directly on web instead. Its web
