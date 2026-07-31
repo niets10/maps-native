@@ -134,6 +134,8 @@ export const WorldMap = memo(function WorldMap({
                   onMouseLeave: () => onHoverChange(null),
                 }
               : {};
+          const webCursorProps: Record<string, unknown> =
+            Platform.OS === 'web' && canPress ? { style: { cursor: 'pointer' } } : {};
           return (
             <Path
               key={location.id}
@@ -144,6 +146,7 @@ export const WorldMap = memo(function WorldMap({
               opacity={watermark ? 0.05 : 1}
               {...pressProps}
               {...hoverProps}
+              {...webCursorProps}
             />
           );
         })}

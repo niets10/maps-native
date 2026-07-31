@@ -20,14 +20,15 @@ import {
   type CountryHover,
 } from '@/components/world-map';
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
-import { Spacing } from '@/constants/theme';
+import { GlassColors, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { flagEmoji } from '@/lib/utils';
 
 /** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
 const MIN_SCALE_FLOOR = 1;
-/** How far beyond "cover" (the scale at which the map's shorter dimension exactly fills
- * the viewport, eliminating letterboxing) the user can still zoom in. */
+/** How far beyond "contain" (the scale at which the entire map fits in the viewport)
+ * the user can still zoom in. */
 const MAX_ZOOM_MULTIPLIER = 4;
 /** Tolerance for comparing the live scale against the (screen-size-dependent) min/max
  * bounds when deciding whether to disable the zoom buttons. */
@@ -109,6 +110,8 @@ export function ZoomableMap({
   initialScale = 1,
 }: ZoomableMapProps) {
   const theme = useTheme();
+  const scheme = useColorScheme() ?? 'light';
+  const glass = GlassColors[scheme];
   const isNative = Platform.OS !== 'web';
 
   const containerRef = useRef<View>(null);
@@ -185,18 +188,16 @@ export function ZoomableMap({
 
   // The content layer is always exactly as wide as the viewport (see `content`'s style),
   // so its native (unscaled) height is derived purely from the map artwork's own aspect
-  // ratio -- which, on a tall phone screen, is usually shorter than the viewport itself.
-  // "Cover" (never zoom out past the scale where the map's height reaches the viewport's)
-  // is therefore the effective minimum, so the map always fills the viewport with no
-  // empty bands above/below, the same way a real map app behaves.
+  // ratio. "Contain" keeps the whole map visible at minimum zoom (letterboxing if needed);
+  // panning only unlocks once the user zooms in past that fit.
   const getScaleBounds = useCallback((): { min: number; max: number } => {
     const { width, height } = containerSize.current;
     if (width === 0 || height === 0) {
       return { min: MIN_SCALE_FLOOR, max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER };
     }
     const nativeContentHeight = width / MAP_ASPECT_RATIO;
-    const coverScale = Math.max(MIN_SCALE_FLOOR, height / nativeContentHeight);
-    return { min: coverScale, max: coverScale * MAX_ZOOM_MULTIPLIER };
+    const containScale = Math.min(MIN_SCALE_FLOOR, height / nativeContentHeight);
+    return { min: containScale, max: containScale * MAX_ZOOM_MULTIPLIER };
   }, []);
 
   const clampTransform = useCallback(
@@ -205,9 +206,19 @@ export function ZoomableMap({
       const { min, max } = getScaleBounds();
       const nextScale = clamp(scale, min, max);
       const nativeContentHeight = width / MAP_ASPECT_RATIO;
-      const minX = width * (1 - nextScale);
-      const minY = height - nativeContentHeight * nextScale;
-      return { scale: nextScale, x: clamp(x, minX, 0), y: clamp(y, minY, 0) };
+      const scaledWidth = width * nextScale;
+      const scaledHeight = nativeContentHeight * nextScale;
+
+      const minX = scaledWidth <= width ? 0 : width - scaledWidth;
+      const maxX = scaledWidth <= width ? width - scaledWidth : 0;
+      const minY = scaledHeight <= height ? 0 : height - scaledHeight;
+      const maxY = scaledHeight <= height ? height - scaledHeight : 0;
+
+      return {
+        scale: nextScale,
+        x: clamp(x, minX, maxX),
+        y: clamp(y, minY, maxY),
+      };
     },
     [getScaleBounds]
   );
@@ -325,16 +336,21 @@ export function ZoomableMap({
       containerRef.current?.measureInWindow((x, y) => {
         containerPageOrigin.current = { x, y };
       });
-      if (!userInteractedRef.current && initialFocus) {
-        centerOn(initialFocus, initialScale);
+      if (!userInteractedRef.current) {
+        const { min } = getScaleBounds();
+        if (initialFocus) {
+          centerOn(initialFocus, initialScale);
+        } else {
+          centerOn({ x: 0.5, y: 0.5 }, min);
+        }
         return;
       }
       // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
       // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
-      // matters here too, since the cover-fit min/max scale is screen-size-dependent.
+      // matters here too, since the contain-fit min/max scale is screen-size-dependent.
       setTransform(transform.current, { syncUi: true, commitViewBox: isNative });
     },
-    [centerOn, initialFocus, initialScale, isNative, setTransform]
+    [centerOn, getScaleBounds, initialFocus, initialScale, isNative, setTransform]
   );
 
   const zoomByStep = useCallback(
@@ -389,9 +405,9 @@ export function ZoomableMap({
     if (width === 0 || height === 0) return false;
     const { scale } = transform.current;
     const contentHeight = width / MAP_ASPECT_RATIO;
-    // Allow drag whenever the map overflows the viewport on either axis -- including
-    // the cover-fit minimum on tall phones, where the map is wider than the screen.
-    return width * scale > width + 0.5 || contentHeight * scale > height + 0.5;
+    const scaledWidth = width * scale;
+    const scaledHeight = contentHeight * scale;
+    return scaledWidth > width + 0.5 || scaledHeight > height + 0.5;
   }, []);
 
   const captureGestureStart = useCallback((
@@ -521,7 +537,14 @@ export function ZoomableMap({
     <View style={styles.wrapper}>
       <View
         ref={setContainerRef}
-        style={[styles.viewport, Platform.OS === 'web' && webCursorStyle(scaleForUi > minScale + SCALE_EPSILON)]}
+        style={[
+          styles.viewport,
+          Platform.OS === 'web' &&
+            (webCursorStyle({
+              canPan: scaleForUi > minScale + SCALE_EPSILON,
+              isHoveringCountry: Boolean(hoveredCode),
+            }) as unknown as Record<string, unknown>),
+        ]}
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}>
         {isNative ? (
@@ -583,7 +606,7 @@ export function ZoomableMap({
           disabled={scaleForUi <= minScale + SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
-            { borderColor: theme.border, backgroundColor: theme.backgroundElement },
+            { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi <= minScale + SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
@@ -594,7 +617,7 @@ export function ZoomableMap({
           disabled={scaleForUi >= maxScale - SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
-            { borderColor: theme.border, backgroundColor: theme.backgroundElement },
+            { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi >= maxScale - SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
@@ -607,8 +630,16 @@ export function ZoomableMap({
 
 // `cursor` isn't part of RN's ViewStyle typings, but react-native-web passes it straight
 // through to the underlying `<div>`, so it's a harmless no-op on native.
-function webCursorStyle(canPan: boolean) {
-  return { cursor: canPan ? 'grab' : 'default' } as unknown as Record<string, unknown>;
+function webCursorStyle ({
+  canPan,
+  isHoveringCountry,
+}: {
+  canPan: boolean;
+  isHoveringCountry: boolean;
+}) {
+  if (isHoveringCountry) return { cursor: 'pointer' };
+  if (canPan) return { cursor: 'grab' };
+  return { cursor: 'default' };
 }
 
 const styles = StyleSheet.create({
@@ -620,7 +651,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-    borderRadius: Spacing.two,
   },
   content: {
     position: 'absolute',

@@ -1,68 +1,54 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CountryInfoModal } from '@/components/country-info-modal';
+import { GlassSurface } from '@/components/glass-surface';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { getCountryFocusFraction } from '@/components/world-map';
 import { ZoomableMap } from '@/components/zoomable-map';
-import { BottomTabInset, MaxContentWidth, Spacing, TopBarInset } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useVisitedCountries } from '@/lib/use-visited-countries';
 import { computeTravelStats } from '@/lib/stats';
 
-const FOCUS_COUNTRY_CODE = 'es';
-const FOCUS_SCALE = 2;
-
-export default function MapScreen() {
+export default function MapScreen () {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { visited, notesByCountry, isLoading, saveCountry } = useVisitedCountries();
   const stats = computeTravelStats(visited);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
-  const focusFraction = useMemo(() => getCountryFocusFraction(FOCUS_COUNTRY_CODE), []);
-
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.background }]}
-      edges={['top', 'left', 'right']}>
-      <View style={[styles.content, { paddingBottom: BottomTabInset + Spacing.three }]}>
-        <ThemedView style={styles.header}>
-          <ThemedText type="label" themeColor="accent">
-            Field Atlas
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator />
+        </View>
+      ) : (
+        <ZoomableMap visited={visited} onCountryPress={setSelectedCode} />
+      )}
+
+      <GlassSurface
+        style={[
+          styles.statsOverlay,
+          {
+            left: Spacing.three + insets.left,
+            bottom: BottomTabInset + Spacing.three + insets.bottom,
+          },
+        ]}>
+        <ThemedView style={styles.statRow}>
+          <ThemedText type="stat" themeColor="accent">
+            {stats.percent}%
           </ThemedText>
-          <ThemedView style={styles.statRow}>
-            <ThemedText type="stat" themeColor="accent">
-              {stats.percent}%
+          <ThemedView style={styles.statCaption}>
+            <ThemedText type="smallBold">of the world explored</ThemedText>
+            <ThemedText themeColor="textSecondary" type="small">
+              {stats.visitedCount} of {stats.totalCount} countries
             </ThemedText>
-            <ThemedView style={styles.statCaption}>
-              <ThemedText type="smallBold">of the world explored</ThemedText>
-              <ThemedText themeColor="textSecondary" type="small">
-                {stats.visitedCount} of {stats.totalCount} countries
-              </ThemedText>
-            </ThemedView>
           </ThemedView>
         </ThemedView>
-
-        {isLoading ? (
-          <ThemedView style={styles.loading}>
-            <ActivityIndicator />
-          </ThemedView>
-        ) : (
-          <ThemedView type="backgroundElement" style={styles.mapCard}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.mapHint}>
-              Tap a country to add notes. Drag to pan, scroll or pinch to zoom.
-            </ThemedText>
-            <ZoomableMap
-              visited={visited}
-              onCountryPress={setSelectedCode}
-              initialFocus={focusFraction}
-              initialScale={FOCUS_SCALE}
-            />
-          </ThemedView>
-        )}
-      </View>
+      </GlassSurface>
 
       <CountryInfoModal
         countryCode={selectedCode}
@@ -71,48 +57,35 @@ export default function MapScreen() {
         onClose={() => setSelectedCode(null)}
         onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
   },
-  content: {
+  loading: {
     flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four + TopBarInset,
-    gap: Spacing.three,
   },
-  header: {
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    gap: Spacing.two,
+  statsOverlay: {
+    position: 'absolute',
+    borderRadius: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    maxWidth: 320,
   },
   statRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.three,
+    backgroundColor: 'transparent',
   },
   statCaption: {
     gap: Spacing.half,
     paddingBottom: Spacing.two,
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  mapCard: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    borderRadius: Spacing.four,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  mapHint: {
-    textAlign: 'center',
+    backgroundColor: 'transparent',
   },
 });

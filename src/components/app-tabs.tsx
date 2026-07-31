@@ -1,16 +1,17 @@
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 
-import { Colors } from '@/constants/theme';
+import { Colors, GlassColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function AppTabs () {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme ?? 'light'];
+  const scheme = useColorScheme() ?? 'light';
+  const colors = Colors[scheme];
+  const glass = GlassColors[scheme];
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
+      backgroundColor={glass.background}
+      indicatorColor={colors.backgroundSelected}
       tintColor={colors.accent}
       labelStyle={{ selected: { color: colors.text } }}>
       <NativeTabs.Trigger name="index">
