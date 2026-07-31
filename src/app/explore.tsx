@@ -22,7 +22,7 @@ type Section = {
 
 export default function CountriesScreen() {
   const theme = useTheme();
-  const { visited, notesByCountry, saveCountry } = useVisitedCountries();
+  const { visited, notesByCountry, yearByCountry, saveCountry } = useVisitedCountries();
   const [query, setQuery] = useState('');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [collapsedContinents, setCollapsedContinents] = useState<Set<string>>(() => new Set());
@@ -167,6 +167,7 @@ export default function CountriesScreen() {
         countryCode={selectedCode}
         isVisited={selectedCode ? visited.has(selectedCode) : false}
         initialNotes={selectedCode ? notesByCountry.get(selectedCode) ?? '' : ''}
+        initialVisitedYear={selectedCode ? yearByCountry.get(selectedCode) ?? null : null}
         onClose={() => setSelectedCode(null)}
         onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
       />

@@ -15,7 +15,7 @@ import { computeTravelStats } from '@/lib/stats';
 export default function MapScreen () {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { visited, notesByCountry, isLoading, saveCountry } = useVisitedCountries();
+  const { visited, notesByCountry, yearByCountry, isLoading, saveCountry } = useVisitedCountries();
   const stats = computeTravelStats(visited);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
@@ -54,6 +54,7 @@ export default function MapScreen () {
         countryCode={selectedCode}
         isVisited={selectedCode ? visited.has(selectedCode) : false}
         initialNotes={selectedCode ? notesByCountry.get(selectedCode) ?? '' : ''}
+        initialVisitedYear={selectedCode ? yearByCountry.get(selectedCode) ?? null : null}
         onClose={() => setSelectedCode(null)}
         onSave={(options) => (selectedCode ? saveCountry(selectedCode, options) : Promise.resolve())}
       />

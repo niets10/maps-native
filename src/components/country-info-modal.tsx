@@ -16,20 +16,22 @@ import { ThemedView } from '@/components/themed-view';
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { flagEmoji } from '@/lib/utils';
+import { flagEmoji, parseVisitYear } from '@/lib/utils';
 
 type CountryInfoModalProps = {
   countryCode: string | null;
   isVisited: boolean;
   initialNotes: string;
+  initialVisitedYear: number | null;
   onClose: () => void;
-  onSave: (options: { isVisited: boolean; notes: string }) => Promise<void>;
+  onSave: (options: { isVisited: boolean; notes: string; visitedYear: number | null }) => Promise<void>;
 };
 
 export function CountryInfoModal({
   countryCode,
   isVisited,
   initialNotes,
+  initialVisitedYear,
   onClose,
   onSave,
 }: CountryInfoModalProps) {
@@ -38,20 +40,35 @@ export function CountryInfoModal({
 
   const [visited, setVisited] = useState(isVisited);
   const [notes, setNotes] = useState(initialNotes);
+  const [visitYear, setVisitYear] = useState(initialVisitedYear?.toString() ?? '');
+  const [yearError, setYearError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setVisited(isVisited);
     setNotes(initialNotes);
-  }, [countryCode, isVisited, initialNotes]);
+    setVisitYear(initialVisitedYear?.toString() ?? '');
+    setYearError(null);
+  }, [countryCode, isVisited, initialNotes, initialVisitedYear]);
 
   if (!countryCode || !country) return null;
 
   async function handleSave() {
+    const trimmedYear = visitYear.trim();
+    let parsedYear: number | null = null;
+
+    if (trimmedYear) {
+      parsedYear = parseVisitYear(trimmedYear);
+      if (parsedYear == null) {
+        setYearError(`Enter a year between 1900 and ${new Date().getFullYear()}.`);
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
-      const shouldMarkVisited = visited || notes.trim().length > 0;
-      await onSave({ isVisited: shouldMarkVisited, notes });
+      const shouldMarkVisited = visited || notes.trim().length > 0 || parsedYear != null;
+      await onSave({ isVisited: shouldMarkVisited, notes, visitedYear: parsedYear });
       onClose();
     } finally {
       setIsSaving(false);
@@ -107,6 +124,37 @@ export function CountryInfoModal({
             <ThemedText>Mark as visited</ThemedText>
           </Pressable>
 
+          <View style={styles.yearSection}>
+            <ThemedText type="label" themeColor="textSecondary">
+              Year visited
+            </ThemedText>
+            <TextInput
+              value={visitYear}
+              onChangeText={(value) => {
+                setVisitYear(value.replace(/[^\d]/g, '').slice(0, 4));
+                if (yearError) setYearError(null);
+              }}
+              placeholder="e.g. 2019"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="number-pad"
+              maxLength={4}
+              style={[
+                styles.yearInput,
+                {
+                  color: theme.text,
+                  borderColor: yearError ? theme.accent : theme.border,
+                  backgroundColor: theme.background,
+                  fontFamily: Fonts.body,
+                },
+              ]}
+            />
+            {yearError ? (
+              <ThemedText type="small" themeColor="accent">
+                {yearError}
+              </ThemedText>
+            ) : null}
+          </View>
+
           <View style={styles.notesSection}>
             <ThemedText type="label" themeColor="textSecondary">
               Notes
@@ -114,7 +162,7 @@ export function CountryInfoModal({
             <TextInput
               value={notes}
               onChangeText={setNotes}
-              placeholder="When did you visit? What stood out?"
+              placeholder="What stood out? Favorite spots, food, memories..."
               placeholderTextColor={theme.textSecondary}
               multiline
               textAlignVertical="top"
@@ -228,6 +276,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  yearSection: {
+    gap: Spacing.two,
+  },
+  yearInput: {
+    fontSize: 16,
+    lineHeight: 24,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Spacing.three,
   },
   notesSection: {
     gap: Spacing.two,

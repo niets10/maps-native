@@ -48,7 +48,14 @@ create trigger on_auth_user_created
 create table if not exists public.visited_countries (
   user_id uuid not null references auth.users (id) on delete cascade,
   country_code text not null check (char_length(country_code) = 2),
-  visited_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  visited_year integer check (
+    visited_year is null
+    or (
+      visited_year >= 1900
+      and visited_year <= extract(year from now())::integer
+    )
+  ),
   notes text,
   primary key (user_id, country_code)
 );

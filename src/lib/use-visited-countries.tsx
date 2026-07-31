@@ -11,19 +11,27 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 
-type VisitedRow = { country_code: string; notes: string | null };
+type VisitedRow = { country_code: string; notes: string | null; visited_year: number | null };
+
+type SaveCountryOptions = {
+  isVisited: boolean;
+  notes: string;
+  visitedYear: number | null;
+};
 
 type VisitedCountriesValue = {
   visited: Set<string>;
   notesByCountry: Map<string, string>;
+  yearByCountry: Map<string, number>;
   isLoading: boolean;
   error: string | null;
   toggle: (countryCode: string) => Promise<void>;
-  saveCountry: (countryCode: string, options: { isVisited: boolean; notes: string }) => Promise<void>;
+  saveCountry: (countryCode: string, options: SaveCountryOptions) => Promise<void>;
 };
 
 const EMPTY_VISITED: Set<string> = new Set();
 const EMPTY_NOTES: Map<string, string> = new Map();
+const EMPTY_YEARS: Map<string, number> = new Map();
 
 const VisitedCountriesContext = createContext<VisitedCountriesValue | undefined>(undefined);
 
@@ -39,6 +47,7 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
 
   const [visited, setVisited] = useState<Set<string>>(EMPTY_VISITED);
   const [notesByCountry, setNotesByCountry] = useState<Map<string, string>>(EMPTY_NOTES);
+  const [yearByCountry, setYearByCountry] = useState<Map<string, number>>(EMPTY_YEARS);
   const [loadedForUserId, setLoadedForUserId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +58,7 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
 
     supabase
       .from('visited_countries')
-      .select('country_code, notes')
+      .select('country_code, notes, visited_year')
       .eq('user_id', userId)
       .then(({ data, error: fetchError }) => {
         if (!isMounted) return;
@@ -60,6 +69,13 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
           setVisited(new Set(rows.map((row) => row.country_code)));
           setNotesByCountry(
             new Map(rows.filter((row) => row.notes).map((row) => [row.country_code, row.notes!]))
+          );
+          setYearByCountry(
+            new Map(
+              rows
+                .filter((row) => row.visited_year != null)
+                .map((row) => [row.country_code, row.visited_year!])
+            )
           );
         }
         setLoadedForUserId(userId);
@@ -91,6 +107,17 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
             }
             return next;
           });
+          setYearByCountry((current) => {
+            const next = new Map(current);
+            if (payload.eventType === 'DELETE') {
+              next.delete((payload.old as VisitedRow).country_code);
+            } else {
+              const row = payload.new as VisitedRow;
+              if (row.visited_year != null) next.set(row.country_code, row.visited_year);
+              else next.delete(row.country_code);
+            }
+            return next;
+          });
         }
       )
       .subscribe();
@@ -114,6 +141,11 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
       });
       if (isVisited) {
         setNotesByCountry((current) => {
+          const next = new Map(current);
+          next.delete(countryCode);
+          return next;
+        });
+        setYearByCountry((current) => {
           const next = new Map(current);
           next.delete(countryCode);
           return next;
@@ -144,10 +176,11 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
   );
 
   const saveCountry = useCallback(
-    async (countryCode: string, { isVisited, notes }: { isVisited: boolean; notes: string }) => {
+    async (countryCode: string, { isVisited, notes, visitedYear }: SaveCountryOptions) => {
       if (!userId) return;
       const wasVisited = visited.has(countryCode);
       const previousNotes = notesByCountry.get(countryCode);
+      const previousYear = yearByCountry.get(countryCode);
       const trimmedNotes = notes.trim();
 
       setVisited((current) => {
@@ -162,6 +195,12 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
         else next.delete(countryCode);
         return next;
       });
+      setYearByCountry((current) => {
+        const next = new Map(current);
+        if (isVisited && visitedYear != null) next.set(countryCode, visitedYear);
+        else next.delete(countryCode);
+        return next;
+      });
 
       const result = isVisited
         ? await supabase.from('visited_countries').upsert(
@@ -169,6 +208,7 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
               user_id: userId,
               country_code: countryCode,
               notes: trimmedNotes || null,
+              visited_year: visitedYear,
             },
             { onConflict: 'user_id,country_code' }
           )
@@ -194,9 +234,15 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
           else next.delete(countryCode);
           return next;
         });
+        setYearByCountry((current) => {
+          const next = new Map(current);
+          if (wasVisited && previousYear != null) next.set(countryCode, previousYear);
+          else next.delete(countryCode);
+          return next;
+        });
       }
     },
-    [userId, visited, notesByCountry]
+    [userId, visited, notesByCountry, yearByCountry]
   );
 
   const value = useMemo<VisitedCountriesValue>(() => {
@@ -204,6 +250,7 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
       return {
         visited: EMPTY_VISITED,
         notesByCountry: EMPTY_NOTES,
+        yearByCountry: EMPTY_YEARS,
         isLoading: false,
         error,
         toggle,
@@ -213,12 +260,13 @@ export function VisitedCountriesProvider({ children }: { children: ReactNode }) 
     return {
       visited,
       notesByCountry,
+      yearByCountry,
       isLoading: loadedForUserId !== userId,
       error,
       toggle,
       saveCountry,
     };
-  }, [userId, visited, notesByCountry, loadedForUserId, error, toggle, saveCountry]);
+  }, [userId, visited, notesByCountry, yearByCountry, loadedForUserId, error, toggle, saveCountry]);
 
   return <VisitedCountriesContext.Provider value={value}>{children}</VisitedCountriesContext.Provider>;
 }

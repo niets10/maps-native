@@ -23,7 +23,7 @@ A cross-platform (iOS, Android, web) app for tracking which countries you've vis
 1. Create a project at [supabase.com](https://supabase.com).
 2. Open the **SQL Editor** and run the contents of [`supabase/schema.sql`](./supabase/schema.sql). This creates:
    - `profiles` — one row per user, auto-created on sign-up via a trigger
-   - `visited_countries` — the core data (`user_id`, `country_code`, `visited_at`, `notes`)
+   - `visited_countries` — the core data (`user_id`, `country_code`, `created_at`, `visited_year`, `notes`)
    - Row Level Security policies so every user can only read/write their own rows
    - Realtime enabled on `visited_countries` so changes sync live across devices/tabs
 3. Go to **Project Settings -> API** and copy your **Project URL** and **anon public key**.
