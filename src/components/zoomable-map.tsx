@@ -203,6 +203,9 @@ export function ZoomableMap({
   const clampTransform = useCallback(
     ({ scale, x, y }: Transform): Transform => {
       const { width, height } = containerSize.current;
+      // Hidden tabs (or mid-layout passes) can report 0×0; clamping against that
+      // forces y→0 and permanently top-aligns the map once the user has zoomed.
+      if (width === 0 || height === 0) return { scale, x, y };
       const { min, max } = getScaleBounds();
       const nextScale = clamp(scale, min, max);
       const nativeContentHeight = width / MAP_ASPECT_RATIO;
@@ -332,6 +335,9 @@ export function ZoomableMap({
   const handleContainerLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
+      // Ignore zero-size layout events (e.g. when another tab is focused). Re-clamping
+      // against 0×0 corrupts the pan offset; after zoom, auto re-center is disabled.
+      if (width === 0 || height === 0) return;
       containerSize.current = { width, height };
       containerRef.current?.measureInWindow((x, y) => {
         containerPageOrigin.current = { x, y };
