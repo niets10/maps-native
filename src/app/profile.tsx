@@ -1,15 +1,25 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemeToggle } from '@/components/theme-toggle';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, TopBarInset } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { useAuth } from '@/lib/auth-context';
-import { computeTravelStats } from '@/lib/stats';
-import { useVisitedCountries } from '@/lib/use-visited-countries';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import {
+  BottomTabInset,
+  MaxContentWidth,
+  Spacing,
+  TopBarInset,
+} from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/lib/auth-context";
+import { computeTravelStats } from "@/lib/stats";
+import { useVisitedCountries } from "@/lib/use-visited-countries";
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -18,8 +28,8 @@ export default function ProfileScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const stats = computeTravelStats(visited);
-  const email = session?.user.email ?? '';
-  const displayName = email.split('@')[0] || 'Traveler';
+  const email = session?.user.email ?? "";
+  const displayName = email.split("@")[0] || "Traveler";
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -33,18 +43,22 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
-      edges={['top', 'left', 'right']}>
+      edges={["top", "left", "right"]}
+    >
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + Spacing.five }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: BottomTabInset + Spacing.five },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <ThemedText type="label" themeColor="accent">
               Profile
             </ThemedText>
-            <ThemeToggle />
           </View>
-          <ThemedText type="title" style={{ textTransform: 'capitalize' }}>
+          <ThemedText type="title" style={{ textTransform: "capitalize" }}>
             {displayName}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
@@ -70,11 +84,19 @@ export default function ProfileScreen() {
                   {entry.visitedCount}/{entry.totalCount}
                 </ThemedText>
               </View>
-              <View style={[styles.progressTrack, { backgroundColor: theme.backgroundElement }]}>
+              <View
+                style={[
+                  styles.progressTrack,
+                  { backgroundColor: theme.backgroundElement },
+                ]}
+              >
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${entry.percent}%`, backgroundColor: theme.accent },
+                    {
+                      width: `${entry.percent}%`,
+                      backgroundColor: theme.accent,
+                    },
                   ]}
                 />
               </View>
@@ -89,7 +111,8 @@ export default function ProfileScreen() {
             styles.signOutButton,
             { borderColor: theme.border },
             pressed && styles.pressed,
-          ]}>
+          ]}
+        >
           {isSigningOut ? (
             <ActivityIndicator />
           ) : (
@@ -109,30 +132,30 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four + TopBarInset,
     gap: Spacing.five,
   },
   header: {
-    width: '100%',
+    width: "100%",
     maxWidth: MaxContentWidth,
     gap: Spacing.one,
   },
   headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   summaryCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: MaxContentWidth,
     borderRadius: Spacing.four,
     padding: Spacing.four,
     gap: Spacing.one,
   },
   continentList: {
-    width: '100%',
+    width: "100%",
     maxWidth: MaxContentWidth,
     gap: Spacing.three,
   },
@@ -140,25 +163,25 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   continentLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   progressTrack: {
     height: 6,
     borderRadius: 3,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   progressFill: {
-    height: '100%',
+    height: "100%",
     borderRadius: 3,
   },
   signOutButton: {
-    width: '100%',
+    width: "100%",
     maxWidth: MaxContentWidth,
     borderWidth: 1,
     borderRadius: Spacing.five,
     paddingVertical: Spacing.three,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: Spacing.five,
   },
   pressed: {
