@@ -70,6 +70,21 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const GlassColors = {
+  light: {
+    background: 'rgba(246, 239, 225, 0.68)',
+    border: 'rgba(255, 255, 255, 0.5)',
+    tabActive: 'rgba(227, 210, 172, 0.72)',
+    tabInactive: 'rgba(237, 226, 203, 0.35)',
+  },
+  dark: {
+    background: 'rgba(20, 27, 34, 0.72)',
+    border: 'rgba(255, 255, 255, 0.12)',
+    tabActive: 'rgba(40, 52, 62, 0.85)',
+    tabInactive: 'rgba(30, 40, 48, 0.45)',
+  },
+} as const;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 /** Extra top clearance on web, where the floating tab bar overlays the content instead of docking. */
 export const TopBarInset = Platform.select({ web: 64 }) ?? 0;

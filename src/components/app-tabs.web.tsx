@@ -1,13 +1,14 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
 import { Pressable, View, StyleSheet } from 'react-native';
 
+import { GlassSurface } from './glass-surface';
 import { ThemeToggle } from './theme-toggle';
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { GlassColors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function AppTabs() {
+export default function AppTabs () {
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
@@ -28,24 +29,29 @@ export default function AppTabs() {
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+export function TabButton ({ children, isFocused, ...props }: TabTriggerSlotProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const glass = GlassColors[scheme];
+
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
+      <View
+        style={[
+          styles.tabButtonView,
+          { backgroundColor: isFocused ? glass.tabActive : glass.tabInactive },
+        ]}>
         <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
           {children}
         </ThemedText>
-      </ThemedView>
+      </View>
     </Pressable>
   );
 }
 
-export function CustomTabList(props: TabListProps) {
+export function CustomTabList (props: TabListProps) {
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
+    <View {...props} style={styles.tabListContainer} pointerEvents="box-none">
+      <GlassSurface style={styles.innerContainer}>
         <ThemedText type="smallBold" themeColor="accent" style={styles.brandText}>
           Field Atlas
         </ThemedText>
@@ -53,7 +59,7 @@ export function CustomTabList(props: TabListProps) {
         {props.children}
 
         <ThemeToggle size={18} />
-      </ThemedView>
+      </GlassSurface>
     </View>
   );
 }
@@ -61,11 +67,13 @@ export function CustomTabList(props: TabListProps) {
 const styles = StyleSheet.create({
   tabListContainer: {
     position: 'absolute',
+    top: 0,
     width: '100%',
     padding: Spacing.three,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
+    zIndex: 10,
   },
   innerContainer: {
     paddingVertical: Spacing.two,

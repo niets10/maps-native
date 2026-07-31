@@ -20,7 +20,8 @@ import {
   type CountryHover,
 } from '@/components/world-map';
 import { COUNTRIES_BY_CODE } from '@/constants/countries';
-import { Spacing } from '@/constants/theme';
+import { GlassColors, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { flagEmoji } from '@/lib/utils';
 
@@ -109,6 +110,8 @@ export function ZoomableMap({
   initialScale = 1,
 }: ZoomableMapProps) {
   const theme = useTheme();
+  const scheme = useColorScheme() ?? 'light';
+  const glass = GlassColors[scheme];
   const isNative = Platform.OS !== 'web';
 
   const containerRef = useRef<View>(null);
@@ -583,7 +586,7 @@ export function ZoomableMap({
           disabled={scaleForUi <= minScale + SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
-            { borderColor: theme.border, backgroundColor: theme.backgroundElement },
+            { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi <= minScale + SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
@@ -594,7 +597,7 @@ export function ZoomableMap({
           disabled={scaleForUi >= maxScale - SCALE_EPSILON}
           style={({ pressed }) => [
             styles.zoomButton,
-            { borderColor: theme.border, backgroundColor: theme.backgroundElement },
+            { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi >= maxScale - SCALE_EPSILON && styles.zoomButtonDisabled,
           ]}>
@@ -620,7 +623,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-    borderRadius: Spacing.two,
   },
   content: {
     position: 'absolute',
