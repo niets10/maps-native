@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   PanResponder,
   Platform,
@@ -8,9 +8,9 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
   type PanResponderGestureState,
-} from 'react-native';
+} from "react-native";
 
-import { ThemedText } from '@/components/themed-text';
+import { ThemedText } from "@/components/themed-text";
 import {
   MAP_ASPECT_RATIO,
   MAP_VIEWBOX,
@@ -18,19 +18,19 @@ import {
   MAP_VIEWBOX_WIDTH,
   WorldMap,
   type CountryHover,
-} from '@/components/world-map';
-import { COUNTRIES_BY_CODE } from '@/constants/countries';
-import { GlassColors, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSupportsHover } from '@/hooks/use-supports-hover';
-import { useTheme } from '@/hooks/use-theme';
-import { flagEmoji } from '@/lib/utils';
+} from "@/components/world-map";
+import { COUNTRIES_BY_CODE } from "@/constants/countries";
+import { GlassColors, Spacing } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
+import { useTheme } from "@/hooks/use-theme";
+import { flagEmoji } from "@/lib/utils";
 
 /** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
 const MIN_SCALE_FLOOR = 1;
 /** How far beyond "contain" (the scale at which the entire map fits in the viewport)
  * the user can still zoom in. */
-const MAX_ZOOM_MULTIPLIER = 4;
+const MAX_ZOOM_MULTIPLIER = 100;
 /** Tolerance for comparing the live scale against the (screen-size-dependent) min/max
  * bounds when deciding whether to disable the zoom buttons. */
 const SCALE_EPSILON = 0.01;
@@ -63,9 +63,10 @@ function clamp(value: number, min: number, max: number) {
 function transformToViewBox(
   { scale, x, y }: Transform,
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
 ): string {
-  if (viewportWidth <= 0 || viewportHeight <= 0 || scale <= 0) return MAP_VIEWBOX;
+  if (viewportWidth <= 0 || viewportHeight <= 0 || scale <= 0)
+    return MAP_VIEWBOX;
   const contentWidth = viewportWidth;
   const contentHeight = contentWidth / MAP_ASPECT_RATIO;
   const vbX = ((0 - x) / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
@@ -78,7 +79,7 @@ function transformToViewBox(
 /** Pinch distance + midpoint in container-local coords, derived from screen-space touches. */
 function getPinchFromPageTouches(
   touches: { pageX: number; pageY: number }[],
-  pageOrigin: Point
+  pageOrigin: Point,
 ): { distance: number; midpoint: Point } | null {
   if (touches.length < 2) return null;
   const [a, b] = touches;
@@ -111,11 +112,11 @@ export function ZoomableMap({
   initialScale = 1,
 }: ZoomableMapProps) {
   const theme = useTheme();
-  const scheme = useColorScheme() ?? 'light';
+  const scheme = useColorScheme() ?? "light";
   const glass = GlassColors[scheme];
-  const isNative = Platform.OS !== 'web';
+  const isNative = Platform.OS !== "web";
   const supportsHover = useSupportsHover();
-  const showHoverTooltip = Platform.OS === 'web' && supportsHover;
+  const showHoverTooltip = Platform.OS === "web" && supportsHover;
 
   const containerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
@@ -167,8 +168,16 @@ export function ZoomableMap({
     if (!tooltipNode || !containerNode) return;
     const rect = containerNode.getBoundingClientRect();
     const { width, height } = containerSize.current;
-    const x = clamp(clientX - rect.left + TOOLTIP_OFFSET, 0, Math.max(0, width - TOOLTIP_WIDTH_ESTIMATE));
-    const y = clamp(clientY - rect.top + TOOLTIP_OFFSET, 0, Math.max(0, height - TOOLTIP_HEIGHT_ESTIMATE));
+    const x = clamp(
+      clientX - rect.left + TOOLTIP_OFFSET,
+      0,
+      Math.max(0, width - TOOLTIP_WIDTH_ESTIMATE),
+    );
+    const y = clamp(
+      clientY - rect.top + TOOLTIP_OFFSET,
+      0,
+      Math.max(0, height - TOOLTIP_HEIGHT_ESTIMATE),
+    );
     tooltipNode.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, []);
 
@@ -177,7 +186,7 @@ export function ZoomableMap({
       setHoveredCode(hover?.code ?? null);
       if (hover) positionTooltip(hover.clientX, hover.clientY);
     },
-    [positionTooltip]
+    [positionTooltip],
   );
 
   // Reassigned every render (like `handleWheelRef` below) so the native listener -- added
@@ -196,10 +205,16 @@ export function ZoomableMap({
   const getScaleBounds = useCallback((): { min: number; max: number } => {
     const { width, height } = containerSize.current;
     if (width === 0 || height === 0) {
-      return { min: MIN_SCALE_FLOOR, max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER };
+      return {
+        min: MIN_SCALE_FLOOR,
+        max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER,
+      };
     }
     const nativeContentHeight = width / MAP_ASPECT_RATIO;
-    const containScale = Math.min(MIN_SCALE_FLOOR, height / nativeContentHeight);
+    const containScale = Math.min(
+      MIN_SCALE_FLOOR,
+      height / nativeContentHeight,
+    );
     return { min: containScale, max: containScale * MAX_ZOOM_MULTIPLIER };
   }, []);
 
@@ -226,7 +241,7 @@ export function ZoomableMap({
         y: clamp(y, minY, maxY),
       };
     },
-    [getScaleBounds]
+    [getScaleBounds],
   );
 
   const commitIdleViewBox = useCallback(() => {
@@ -248,8 +263,8 @@ export function ZoomableMap({
       } else {
         const node = contentRef.current as unknown as HTMLElement | null;
         if (node) {
-          node.style.transformOrigin = '0 0';
-          node.style.transform = 'translate3d(0px, 0px, 0) scale(1)';
+          node.style.transformOrigin = "0 0";
+          node.style.transform = "translate3d(0px, 0px, 0) scale(1)";
         }
       }
       return;
@@ -267,19 +282,22 @@ export function ZoomableMap({
     }
     const node = contentRef.current as unknown as HTMLElement | null;
     if (!node) return;
-    node.style.transformOrigin = '0 0';
+    node.style.transformOrigin = "0 0";
     node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   }, [isNative]);
 
   const setTransform = useCallback(
-    (next: Transform, options?: { syncUi?: boolean; commitViewBox?: boolean }) => {
+    (
+      next: Transform,
+      options?: { syncUi?: boolean; commitViewBox?: boolean },
+    ) => {
       const clamped = clampTransform(next);
       transform.current = clamped;
       applyTransform();
       if (options?.syncUi) setScaleForUi(clamped.scale);
       if (options?.commitViewBox) commitIdleViewBox();
     },
-    [applyTransform, clampTransform, commitIdleViewBox]
+    [applyTransform, clampTransform, commitIdleViewBox],
   );
 
   // When entering gesture mode, reveal the full-map layer and paint the absolute
@@ -306,17 +324,25 @@ export function ZoomableMap({
   }, [commitIdleViewBox]);
 
   const zoomAroundPoint = useCallback(
-    (focal: Point, nextScaleRaw: number, from: Transform = transform.current) => {
+    (
+      focal: Point,
+      nextScaleRaw: number,
+      from: Transform = transform.current,
+    ) => {
       const { min, max } = getScaleBounds();
       const nextScale = clamp(nextScaleRaw, min, max);
       const contentX = (focal.x - from.x) / from.scale;
       const contentY = (focal.y - from.y) / from.scale;
       setTransform(
-        { scale: nextScale, x: focal.x - contentX * nextScale, y: focal.y - contentY * nextScale },
-        { syncUi: true, commitViewBox: !isGesturingRef.current }
+        {
+          scale: nextScale,
+          x: focal.x - contentX * nextScale,
+          y: focal.y - contentY * nextScale,
+        },
+        { syncUi: true, commitViewBox: !isGesturingRef.current },
       );
     },
-    [getScaleBounds, setTransform]
+    [getScaleBounds, setTransform],
   );
 
   const centerOn = useCallback(
@@ -334,10 +360,10 @@ export function ZoomableMap({
           x: width / 2 - focusFraction.x * width * nextScale,
           y: height / 2 - focusFraction.y * nativeContentHeight * nextScale,
         },
-        { syncUi: true, commitViewBox: true }
+        { syncUi: true, commitViewBox: true },
       );
     },
-    [getScaleBounds, setTransform]
+    [getScaleBounds, setTransform],
   );
 
   const handleContainerLayout = useCallback(
@@ -364,16 +390,19 @@ export function ZoomableMap({
       // matters here too, since the contain-fit min/max scale is screen-size-dependent.
       setTransform(transform.current, { syncUi: true, commitViewBox: true });
     },
-    [centerOn, getScaleBounds, initialFocus, initialScale, setTransform]
+    [centerOn, getScaleBounds, initialFocus, initialScale, setTransform],
   );
 
   const zoomByStep = useCallback(
     (factor: number) => {
       userInteractedRef.current = true;
       const { width, height } = containerSize.current;
-      zoomAroundPoint({ x: width / 2, y: height / 2 }, transform.current.scale * factor);
+      zoomAroundPoint(
+        { x: width / 2, y: height / 2 },
+        transform.current.scale * factor,
+      );
     },
-    [zoomAroundPoint]
+    [zoomAroundPoint],
   );
   const zoomIn = useCallback(() => zoomByStep(1.6), [zoomByStep]);
   const zoomOut = useCallback(() => zoomByStep(1 / 1.6), [zoomByStep]);
@@ -387,7 +416,9 @@ export function ZoomableMap({
   handleWheelRef.current = (event: WheelEvent) => {
     event.preventDefault();
     userInteractedRef.current = true;
-    const rect = (containerRef.current as unknown as HTMLElement).getBoundingClientRect();
+    const rect = (
+      containerRef.current as unknown as HTMLElement
+    ).getBoundingClientRect();
     const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
     const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY);
     zoomAroundPoint(focal, transform.current.scale * factor);
@@ -398,11 +429,12 @@ export function ZoomableMap({
     containerRef.current = node;
     wheelListenerCleanupRef.current?.();
     wheelListenerCleanupRef.current = null;
-    if (Platform.OS !== 'web' || !node) return;
+    if (Platform.OS !== "web" || !node) return;
 
     const domNode = node as unknown as HTMLElement;
     const wheelListener = (event: WheelEvent) => handleWheelRef.current(event);
-    const moveListener = (event: MouseEvent) => handlePointerMoveRef.current(event);
+    const moveListener = (event: MouseEvent) =>
+      handlePointerMoveRef.current(event);
     const leaveListener = () => setHoveredCode(null);
     // Block browser page pinch-zoom while the user is pinching on the map. Without this
     // (and touch-action: none), mobile PWAs zoom the whole app instead of the map layer.
@@ -412,21 +444,21 @@ export function ZoomableMap({
     const blockLegacyGesture = (event: Event) => {
       event.preventDefault();
     };
-    domNode.addEventListener('wheel', wheelListener, { passive: false });
-    domNode.addEventListener('mousemove', moveListener);
-    domNode.addEventListener('mouseleave', leaveListener);
-    domNode.addEventListener('touchstart', blockMultiTouch, { passive: false });
-    domNode.addEventListener('touchmove', blockMultiTouch, { passive: false });
-    domNode.addEventListener('gesturestart', blockLegacyGesture);
-    domNode.addEventListener('gesturechange', blockLegacyGesture);
+    domNode.addEventListener("wheel", wheelListener, { passive: false });
+    domNode.addEventListener("mousemove", moveListener);
+    domNode.addEventListener("mouseleave", leaveListener);
+    domNode.addEventListener("touchstart", blockMultiTouch, { passive: false });
+    domNode.addEventListener("touchmove", blockMultiTouch, { passive: false });
+    domNode.addEventListener("gesturestart", blockLegacyGesture);
+    domNode.addEventListener("gesturechange", blockLegacyGesture);
     wheelListenerCleanupRef.current = () => {
-      domNode.removeEventListener('wheel', wheelListener);
-      domNode.removeEventListener('mousemove', moveListener);
-      domNode.removeEventListener('mouseleave', leaveListener);
-      domNode.removeEventListener('touchstart', blockMultiTouch);
-      domNode.removeEventListener('touchmove', blockMultiTouch);
-      domNode.removeEventListener('gesturestart', blockLegacyGesture);
-      domNode.removeEventListener('gesturechange', blockLegacyGesture);
+      domNode.removeEventListener("wheel", wheelListener);
+      domNode.removeEventListener("mousemove", moveListener);
+      domNode.removeEventListener("mouseleave", leaveListener);
+      domNode.removeEventListener("touchstart", blockMultiTouch);
+      domNode.removeEventListener("touchmove", blockMultiTouch);
+      domNode.removeEventListener("gesturestart", blockLegacyGesture);
+      domNode.removeEventListener("gesturechange", blockLegacyGesture);
     };
   }, []);
 
@@ -440,28 +472,31 @@ export function ZoomableMap({
     return scaledWidth > width + 0.5 || scaledHeight > height + 0.5;
   }, []);
 
-  const captureGestureStart = useCallback((
-    event: GestureResponderEvent,
-    gestureState?: PanResponderGestureState
-  ) => {
-    const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
-    const pinch = getPinchFromPageTouches(event.nativeEvent.touches, containerPageOrigin.current);
-    if (pinch) {
+  const captureGestureStart = useCallback(
+    (event: GestureResponderEvent, gestureState?: PanResponderGestureState) => {
+      const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
+      const pinch = getPinchFromPageTouches(
+        event.nativeEvent.touches,
+        containerPageOrigin.current,
+      );
+      if (pinch) {
+        gestureStartRef.current = {
+          transform: transform.current,
+          pinchDistance: pinch.distance,
+          pinchMidpoint: pinch.midpoint,
+          dragOrigin,
+        };
+        return;
+      }
       gestureStartRef.current = {
         transform: transform.current,
-        pinchDistance: pinch.distance,
-        pinchMidpoint: pinch.midpoint,
+        pinchDistance: null,
+        pinchMidpoint: null,
         dragOrigin,
       };
-      return;
-    }
-    gestureStartRef.current = {
-      transform: transform.current,
-      pinchDistance: null,
-      pinchMidpoint: null,
-      dragOrigin,
-    };
-  }, []);
+    },
+    [],
+  );
 
   const panResponder = useMemo(
     () =>
@@ -475,26 +510,38 @@ export function ZoomableMap({
         // otherwise own the touch and pan never starts.
         onMoveShouldSetPanResponderCapture: (
           event: GestureResponderEvent,
-          gestureState: PanResponderGestureState
+          gestureState: PanResponderGestureState,
         ) => {
           if (event.nativeEvent.touches.length >= 2) return true;
           if (!canPanAtCurrentScale()) return false;
-          return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
+          return (
+            Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
+            Math.abs(gestureState.dy) > DRAG_THRESHOLD
+          );
         },
         onMoveShouldSetPanResponder: (
           event: GestureResponderEvent,
-          gestureState: PanResponderGestureState
+          gestureState: PanResponderGestureState,
         ) => {
           if (event.nativeEvent.touches.length >= 2) return true;
           if (!canPanAtCurrentScale()) return false;
-          return Math.abs(gestureState.dx) > DRAG_THRESHOLD || Math.abs(gestureState.dy) > DRAG_THRESHOLD;
+          return (
+            Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
+            Math.abs(gestureState.dy) > DRAG_THRESHOLD
+          );
         },
-        onPanResponderGrant: (event: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        onPanResponderGrant: (
+          event: GestureResponderEvent,
+          gestureState: PanResponderGestureState,
+        ) => {
           userInteractedRef.current = true;
           beginGesture();
           captureGestureStart(event, gestureState);
         },
-        onPanResponderMove: (event: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        onPanResponderMove: (
+          event: GestureResponderEvent,
+          gestureState: PanResponderGestureState,
+        ) => {
           // Switch to the full-map layer on grant; wait until that paint lands so we don't
           // apply an absolute transform onto the cropped idle viewBox.
           if (!isGesturingRef.current) return;
@@ -503,15 +550,25 @@ export function ZoomableMap({
           let start = gestureStartRef.current;
 
           // Second finger landed mid-drag -- restart as a pinch from the live transform.
-          if (touches.length >= 2 && (!start?.pinchDistance || !start.pinchMidpoint)) {
+          if (
+            touches.length >= 2 &&
+            (!start?.pinchDistance || !start.pinchMidpoint)
+          ) {
             captureGestureStart(event, gestureState);
             start = gestureStartRef.current;
           }
 
           if (!start) return;
 
-          if (touches.length >= 2 && start.pinchDistance && start.pinchMidpoint) {
-            const pinch = getPinchFromPageTouches(touches, containerPageOrigin.current);
+          if (
+            touches.length >= 2 &&
+            start.pinchDistance &&
+            start.pinchMidpoint
+          ) {
+            const pinch = getPinchFromPageTouches(
+              touches,
+              containerPageOrigin.current,
+            );
             if (!pinch) return;
             // Keep the content under the original pinch midpoint locked to the
             // moving midpoint (standard map pinch = zoom + pan together).
@@ -519,10 +576,14 @@ export function ZoomableMap({
             const nextScale = clamp(
               start.transform.scale * (pinch.distance / start.pinchDistance),
               min,
-              max
+              max,
             );
-            const contentX = (start.pinchMidpoint.x - start.transform.x) / start.transform.scale;
-            const contentY = (start.pinchMidpoint.y - start.transform.y) / start.transform.scale;
+            const contentX =
+              (start.pinchMidpoint.x - start.transform.x) /
+              start.transform.scale;
+            const contentY =
+              (start.pinchMidpoint.y - start.transform.y) /
+              start.transform.scale;
             setTransform({
               scale: nextScale,
               x: pinch.midpoint.x - contentX * nextScale,
@@ -557,7 +618,7 @@ export function ZoomableMap({
       endGesture,
       getScaleBounds,
       setTransform,
-    ]
+    ],
   );
 
   const { min: minScale, max: maxScale } = getScaleBounds();
@@ -568,18 +629,20 @@ export function ZoomableMap({
         ref={setContainerRef}
         style={[
           styles.viewport,
-          Platform.OS === 'web' &&
+          Platform.OS === "web" &&
             (webCursorStyle({
               canPan: scaleForUi > minScale + SCALE_EPSILON,
               isHoveringCountry: Boolean(hoveredCode),
             }) as unknown as Record<string, unknown>),
         ]}
         onLayout={handleContainerLayout}
-        {...panResponder.panHandlers}>
+        {...panResponder.panHandlers}
+      >
         {/* Sharp idle layer: viewBox crop at viewport resolution. */}
         <View
           style={[styles.idleLayer, isGesturing && styles.invisible]}
-          pointerEvents={isGesturing ? 'none' : 'auto'}>
+          pointerEvents={isGesturing ? "none" : "auto"}
+        >
           <WorldMap
             visited={visited}
             onToggle={onToggle}
@@ -593,7 +656,8 @@ export function ZoomableMap({
         <View
           ref={contentRef}
           style={[styles.content, !isGesturing && styles.invisible]}
-          pointerEvents="none">
+          pointerEvents="none"
+        >
           <WorldMap visited={visited} interactive={false} />
         </View>
 
@@ -606,13 +670,18 @@ export function ZoomableMap({
               {
                 backgroundColor: theme.backgroundElement,
                 borderColor: theme.border,
-                display: hoveredCode ? 'flex' : 'none',
+                display: hoveredCode ? "flex" : "none",
               },
-            ]}>
+            ]}
+          >
             {hoveredCode ? (
               <>
-                <ThemedText style={styles.tooltipFlag}>{flagEmoji(hoveredCode)}</ThemedText>
-                <ThemedText type="smallBold">{COUNTRIES_BY_CODE[hoveredCode]?.name}</ThemedText>
+                <ThemedText style={styles.tooltipFlag}>
+                  {flagEmoji(hoveredCode)}
+                </ThemedText>
+                <ThemedText type="smallBold">
+                  {COUNTRIES_BY_CODE[hoveredCode]?.name}
+                </ThemedText>
               </>
             ) : null}
           </View>
@@ -628,7 +697,8 @@ export function ZoomableMap({
             { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi <= minScale + SCALE_EPSILON && styles.zoomButtonDisabled,
-          ]}>
+          ]}
+        >
           <ThemedText type="smallBold">−</ThemedText>
         </Pressable>
         <Pressable
@@ -639,7 +709,8 @@ export function ZoomableMap({
             { borderColor: glass.border, backgroundColor: glass.background },
             pressed && styles.zoomButtonPressed,
             scaleForUi >= maxScale - SCALE_EPSILON && styles.zoomButtonDisabled,
-          ]}>
+          ]}
+        >
           <ThemedText type="smallBold">+</ThemedText>
         </Pressable>
       </View>
@@ -649,40 +720,40 @@ export function ZoomableMap({
 
 // `cursor` isn't part of RN's ViewStyle typings, but react-native-web passes it straight
 // through to the underlying `<div>`, so it's a harmless no-op on native.
-function webCursorStyle ({
+function webCursorStyle({
   canPan,
   isHoveringCountry,
 }: {
   canPan: boolean;
   isHoveringCountry: boolean;
 }) {
-  if (isHoveringCountry) return { cursor: 'pointer' };
-  if (canPan) return { cursor: 'grab' };
-  return { cursor: 'default' };
+  if (isHoveringCountry) return { cursor: "pointer" };
+  if (canPan) return { cursor: "grab" };
+  return { cursor: "default" };
 }
 
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    width: '100%',
+    width: "100%",
   },
   viewport: {
     flex: 1,
-    width: '100%',
-    overflow: 'hidden',
+    width: "100%",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        touchAction: 'none',
-        overscrollBehavior: 'none',
+        touchAction: "none",
+        overscrollBehavior: "none",
       },
       default: {},
     }),
   },
   content: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
-    width: '100%',
+    width: "100%",
   },
   idleLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -691,11 +762,11 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   tooltip: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
@@ -706,7 +777,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   zoomControls: {
-    position: 'absolute',
+    position: "absolute",
     right: Spacing.two,
     bottom: Spacing.two,
     gap: Spacing.two,
@@ -716,8 +787,8 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   zoomButtonPressed: {
     opacity: 0.6,
