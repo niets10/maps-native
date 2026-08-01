@@ -248,10 +248,8 @@ export function ZoomableMap({
 
   const applyTransform = useCallback(() => {
     const { scale, x, y } = transform.current;
-    // All the pan/zoom math below (clampTransform, zoomAroundPoint, centerOn) assumes
-    // `screen = translate + scale * content`, i.e. scaling pivots around the content's
-    // own top-left corner. Both platforms default the pivot to the element's center, so
-    // it must be pinned to the top-left corner or every formula below is off.
+    const { width } = containerSize.current;
+    const contentHeight = width / MAP_ASPECT_RATIO;
     // Idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
     if (!isGesturingRef.current) {
       if (isNative) {
@@ -261,12 +259,13 @@ export function ZoomableMap({
         if (node) {
           node.style.transformOrigin = "0 0";
           node.style.transform = "translate3d(0px, 0px, 0) scale(1)";
+          node.style.width = "100%";
+          node.style.height = "";
         }
       }
       return;
     }
-    // Gesture: GPU-scale the full map (responsive). Softness is OK mid-gesture;
-    // we bake a sharp viewBox on release.
+    // Native: GPU-scale the full map layer.
     if (isNative) {
       contentRef.current?.setNativeProps({
         style: {
@@ -276,10 +275,14 @@ export function ZoomableMap({
       });
       return;
     }
+    // Web: size the layer to the current zoom instead of CSS-scaling it, so SVG
+    // paths render at viewport resolution and stay sharp while panning.
     const node = contentRef.current as unknown as HTMLElement | null;
-    if (!node) return;
+    if (!node || width === 0) return;
+    node.style.width = `${scale * width}px`;
+    node.style.height = `${scale * contentHeight}px`;
     node.style.transformOrigin = "0 0";
-    node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, [isNative]);
 
   const setTransform = useCallback(
@@ -304,6 +307,7 @@ export function ZoomableMap({
   }, [isGesturing, applyTransform]);
 
   const beginGesture = useCallback(() => {
+    isGesturingRef.current = true;
     setIsGesturing(true);
   }, []);
 
