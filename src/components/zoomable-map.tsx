@@ -2,7 +2,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   PanResponder,
   Platform,
-  Pressable,
   StyleSheet,
   View,
   type GestureResponderEvent,
@@ -20,8 +19,7 @@ import {
   type CountryHover,
 } from "@/components/world-map";
 import { COUNTRIES_BY_CODE } from "@/constants/countries";
-import { GlassColors, Spacing } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Spacing } from '@/constants/theme';
 import { useSupportsHover } from "@/hooks/use-supports-hover";
 import { useTheme } from "@/hooks/use-theme";
 import { flagEmoji } from "@/lib/utils";
@@ -112,8 +110,6 @@ export function ZoomableMap({
   initialScale = 1,
 }: ZoomableMapProps) {
   const theme = useTheme();
-  const scheme = useColorScheme() ?? "light";
-  const glass = GlassColors[scheme];
   const isNative = Platform.OS !== "web";
   const supportsHover = useSupportsHover();
   const showHoverTooltip = Platform.OS === "web" && supportsHover;
@@ -135,8 +131,8 @@ export function ZoomableMap({
 
   // The transform is mutated directly on the content node for every pointer/wheel tick
   // (see `applyTransform`), so dragging and pinching stay smooth without round-tripping
-  // through React state on every frame. `scaleForUi` is the only piece we mirror into
-  // React state, since the zoom buttons need to re-render.
+  // through React state on every frame. `scaleForUi` is mirrored into React state so
+  // the web cursor (grab vs default) updates after zoom gestures.
   const transform = useRef<Transform>({ scale: initialScale, x: 0, y: 0 });
   const [scaleForUi, setScaleForUi] = useState(initialScale);
 
@@ -393,20 +389,6 @@ export function ZoomableMap({
     [centerOn, getScaleBounds, initialFocus, initialScale, setTransform],
   );
 
-  const zoomByStep = useCallback(
-    (factor: number) => {
-      userInteractedRef.current = true;
-      const { width, height } = containerSize.current;
-      zoomAroundPoint(
-        { x: width / 2, y: height / 2 },
-        transform.current.scale * factor,
-      );
-    },
-    [zoomAroundPoint],
-  );
-  const zoomIn = useCallback(() => zoomByStep(1.6), [zoomByStep]);
-  const zoomOut = useCallback(() => zoomByStep(1 / 1.6), [zoomByStep]);
-
   // Trackpad pinch-to-zoom and ctrl+scroll both fire as `wheel` events with
   // `ctrlKey: true` in browsers -- there's no native multi-touch event for trackpad
   // gestures. A plain two-finger scroll (no ctrl) zooms too: pushing both fingers
@@ -621,7 +603,7 @@ export function ZoomableMap({
     ],
   );
 
-  const { min: minScale, max: maxScale } = getScaleBounds();
+  const { min: minScale } = getScaleBounds();
 
   return (
     <View style={styles.wrapper}>
@@ -687,33 +669,6 @@ export function ZoomableMap({
           </View>
         ) : null}
       </View>
-
-      <View style={styles.zoomControls}>
-        <Pressable
-          onPress={zoomOut}
-          disabled={scaleForUi <= minScale + SCALE_EPSILON}
-          style={({ pressed }) => [
-            styles.zoomButton,
-            { borderColor: glass.border, backgroundColor: glass.background },
-            pressed && styles.zoomButtonPressed,
-            scaleForUi <= minScale + SCALE_EPSILON && styles.zoomButtonDisabled,
-          ]}
-        >
-          <ThemedText type="smallBold">−</ThemedText>
-        </Pressable>
-        <Pressable
-          onPress={zoomIn}
-          disabled={scaleForUi >= maxScale - SCALE_EPSILON}
-          style={({ pressed }) => [
-            styles.zoomButton,
-            { borderColor: glass.border, backgroundColor: glass.background },
-            pressed && styles.zoomButtonPressed,
-            scaleForUi >= maxScale - SCALE_EPSILON && styles.zoomButtonDisabled,
-          ]}
-        >
-          <ThemedText type="smallBold">+</ThemedText>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -775,25 +730,5 @@ const styles = StyleSheet.create({
   },
   tooltipFlag: {
     fontSize: 20,
-  },
-  zoomControls: {
-    position: "absolute",
-    right: Spacing.two,
-    bottom: Spacing.two,
-    gap: Spacing.two,
-  },
-  zoomButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  zoomButtonPressed: {
-    opacity: 0.6,
-  },
-  zoomButtonDisabled: {
-    opacity: 0.35,
   },
 });
