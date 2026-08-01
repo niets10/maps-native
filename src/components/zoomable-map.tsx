@@ -248,10 +248,6 @@ export function ZoomableMap({
 
   const applyTransform = useCallback(() => {
     const { scale, x, y } = transform.current;
-    // All the pan/zoom math below (clampTransform, zoomAroundPoint, centerOn) assumes
-    // `screen = translate + scale * content`, i.e. scaling pivots around the content's
-    // own top-left corner. Both platforms default the pivot to the element's center, so
-    // it must be pinned to the top-left corner or every formula below is off.
     // Idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
     if (!isGesturingRef.current) {
       if (isNative) {
@@ -304,6 +300,7 @@ export function ZoomableMap({
   }, [isGesturing, applyTransform]);
 
   const beginGesture = useCallback(() => {
+    isGesturingRef.current = true;
     setIsGesturing(true);
   }, []);
 
