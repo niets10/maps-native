@@ -41,6 +41,8 @@ const TOOLTIP_OFFSET = 16;
 /** Rough tooltip footprint, used to keep it from drifting past the viewport edge. */
 const TOOLTIP_WIDTH_ESTIMATE = 200;
 const TOOLTIP_HEIGHT_ESTIMATE = 44;
+/** On native (phone), start this many times closer than the "fit entire map" zoom. */
+const NATIVE_INITIAL_ZOOM_MULTIPLIER = 2.5;
 
 const IDENTITY_TRANSFORM = {
   transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }],
@@ -381,7 +383,8 @@ export function ZoomableMap({
         if (initialFocus) {
           centerOn(initialFocus, initialScale);
         } else {
-          centerOn({ x: 0.5, y: 0.5 }, min);
+          const scale = isNative ? min * NATIVE_INITIAL_ZOOM_MULTIPLIER : min;
+          centerOn({ x: 0.5, y: 0.5 }, scale);
         }
         return;
       }
