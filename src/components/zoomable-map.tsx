@@ -23,7 +23,6 @@ import { Spacing } from '@/constants/theme';
 import { useSupportsHover } from "@/hooks/use-supports-hover";
 import { useTheme } from "@/hooks/use-theme";
 import { flagEmoji } from "@/lib/utils";
-import type Svg from "react-native-svg";
 
 /** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
 const MIN_SCALE_FLOOR = 1;
@@ -117,7 +116,6 @@ export function ZoomableMap({
 
   const containerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
-  const idleSvgRef = useRef<Svg | null>(null);
   const containerSize = useRef({ width: 0, height: 0 });
   // Screen-space origin of the viewport, kept in sync via `measureInWindow` so pinch
   // math can convert `pageX`/`pageY` into container-local coordinates. Using
@@ -248,22 +246,12 @@ export function ZoomableMap({
     setIdleViewBox(transformToViewBox(transform.current, width, height));
   }, []);
 
-  /** Web: mutate viewBox on the idle SVG directly so gestures stay vector-sharp. */
-  const applyLiveViewBox = useCallback(() => {
-    const { width, height } = containerSize.current;
-    if (width === 0 || height === 0) return;
-    const viewBox = transformToViewBox(transform.current, width, height);
-    idleSvgRef.current?.setNativeProps({ viewBox });
-  }, []);
-
   const applyTransform = useCallback(() => {
-    // Web keeps the sharp idle layer visible during gestures by updating viewBox
-    // directly on the SVG (no React re-render per frame). Native still uses the
-    // cheap CSS-transform gesture layer and bakes back into viewBox on release.
-    if (!isNative && isGesturingRef.current) {
-      applyLiveViewBox();
-      return;
-    }
+    const { scale, x, y } = transform.current;
+    // All the pan/zoom math below (clampTransform, zoomAroundPoint, centerOn) assumes
+    // `screen = translate + scale * content`, i.e. scaling pivots around the content's
+    // own top-left corner. Both platforms default the pivot to the element's center, so
+    // it must be pinned to the top-left corner or every formula below is off.
     // Idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
     if (!isGesturingRef.current) {
       if (isNative) {
@@ -277,16 +265,22 @@ export function ZoomableMap({
       }
       return;
     }
-    // Native gesture: GPU-scale the full map (responsive). Softness is OK mid-gesture;
+    // Gesture: GPU-scale the full map (responsive). Softness is OK mid-gesture;
     // we bake a sharp viewBox on release.
-    const { scale, x, y } = transform.current;
-    contentRef.current?.setNativeProps({
-      style: {
-        transform: [{ translateX: x }, { translateY: y }, { scale }],
-        transformOrigin: [0, 0, 0],
-      },
-    });
-  }, [applyLiveViewBox, isNative]);
+    if (isNative) {
+      contentRef.current?.setNativeProps({
+        style: {
+          transform: [{ translateX: x }, { translateY: y }, { scale }],
+          transformOrigin: [0, 0, 0],
+        },
+      });
+      return;
+    }
+    const node = contentRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    node.style.transformOrigin = "0 0";
+    node.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  }, [isNative]);
 
   const setTransform = useCallback(
     (
@@ -310,7 +304,6 @@ export function ZoomableMap({
   }, [isGesturing, applyTransform]);
 
   const beginGesture = useCallback(() => {
-    isGesturingRef.current = true;
     setIsGesturing(true);
   }, []);
 
@@ -627,14 +620,9 @@ export function ZoomableMap({
         onLayout={handleContainerLayout}
         {...panResponder.panHandlers}
       >
-        {/* Sharp idle layer: viewBox crop at viewport resolution. On web it stays visible
-            during gestures (viewBox is updated directly on the SVG). On native it hides
-            while the CSS-transform gesture layer handles the interaction. */}
+        {/* Sharp idle layer: viewBox crop at viewport resolution. */}
         <View
-          style={[
-            styles.idleLayer,
-            isNative && isGesturing && styles.invisible,
-          ]}
+          style={[styles.idleLayer, isGesturing && styles.invisible]}
           pointerEvents={isGesturing ? "none" : "auto"}
         >
           <WorldMap
@@ -644,19 +632,16 @@ export function ZoomableMap({
             onHoverChange={showHoverTooltip ? handleHoverChange : undefined}
             fillParent
             mapViewBox={idleViewBox}
-            svgRef={idleSvgRef}
           />
         </View>
-        {/* Native-only gesture layer: full map + CSS transform. */}
-        {isNative ? (
-          <View
-            ref={contentRef}
-            style={[styles.content, !isGesturing && styles.invisible]}
-            pointerEvents="none"
-          >
-            <WorldMap visited={visited} interactive={false} />
-          </View>
-        ) : null}
+        {/* Gesture layer: full map + transform (always mounted so grant is instant). */}
+        <View
+          ref={contentRef}
+          style={[styles.content, !isGesturing && styles.invisible]}
+          pointerEvents="none"
+        >
+          <WorldMap visited={visited} interactive={false} />
+        </View>
 
         {showHoverTooltip ? (
           <View

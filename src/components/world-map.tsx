@@ -1,5 +1,5 @@
 import worldMap from '@svg-maps/world';
-import { memo, useMemo, type Ref } from 'react';
+import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -22,8 +22,6 @@ type WorldMapProps = {
   fillParent?: boolean;
   /** Override the SVG viewBox (e.g. a cropped region for native idle zoom). */
   mapViewBox?: string;
-  /** Ref to the root `<Svg>` — used on web for direct viewBox updates during gestures. */
-  svgRef?: Ref<Svg>;
   /** Reports the map's rendered pixel size, e.g. so a parent ScrollView can scroll to a country. */
   onLayout?: (event: LayoutChangeEvent) => void;
   /** Web-only: reports the country under the pointer (with its cursor position), or null once it leaves. */
@@ -75,7 +73,6 @@ export const WorldMap = memo(function WorldMap({
   watermark = false,
   fillParent = false,
   mapViewBox = defaultViewBox,
-  svgRef,
   onLayout,
   onHoverChange,
 }: WorldMapProps) {
@@ -107,7 +104,6 @@ export const WorldMap = memo(function WorldMap({
   return (
     <View style={containerStyle} onLayout={onLayout}>
       <Svg
-        ref={svgRef}
         viewBox={mapViewBox}
         width="100%"
         height="100%"
