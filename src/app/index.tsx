@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { WebPageTitle } from '@/components/web-page-title';
 import { CountryInfoModal } from '@/components/country-info-modal';
 import { GlassSurface } from '@/components/glass-surface';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WebPageTitle } from '@/components/web-page-title';
 import { ZoomableMap } from '@/components/zoomable-map';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useVisitedCountries } from '@/lib/use-visited-countries';
+import { isPhonePwa } from '@/lib/is-phone-pwa';
 import { computeTravelStats } from '@/lib/stats';
+import { useVisitedCountries } from '@/lib/use-visited-countries';
+
+const MAP_INITIAL_SCALE = Platform.OS === 'web' && isPhonePwa() ? 4 : 1;
 
 export default function MapScreen() {
     const theme = useTheme();
@@ -30,7 +33,11 @@ export default function MapScreen() {
                         <ActivityIndicator />
                     </View>
                 ) : (
-                    <ZoomableMap visited={visited} onCountryPress={setSelectedCode} />
+                    <ZoomableMap
+                        visited={visited}
+                        onCountryPress={setSelectedCode}
+                        initialScale={MAP_INITIAL_SCALE}
+                    />
                 )}
 
                 <GlassSurface

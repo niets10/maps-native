@@ -96,8 +96,8 @@ type ZoomableMapProps = {
     onToggle?: (countryCode: string) => void;
     onCountryPress?: (countryCode: string) => void;
     /** Fraction (0-1 on each axis) of the map to center on when it first mounts. */
-    initialFocus?: Point | null;
-    /** Zoom level to start at when centering on `initialFocus`. */
+    initialFocus?: Point;
+    /** Multiplier on the contain-fit scale when the map first mounts (3 = 3× fit scale). */
     initialScale?: number;
 };
 
@@ -105,7 +105,7 @@ export function ZoomableMap({
     visited,
     onToggle,
     onCountryPress,
-    initialFocus,
+    initialFocus = { x: 0.5, y: 0.5 },
     initialScale = 1,
 }: ZoomableMapProps) {
     const theme = useTheme();
@@ -367,11 +367,7 @@ export function ZoomableMap({
             });
             if (!userInteractedRef.current) {
                 const { min } = getScaleBounds();
-                if (initialFocus) {
-                    centerOn(initialFocus, initialScale);
-                } else {
-                    centerOn({ x: 0.5, y: 0.5 }, min);
-                }
+                centerOn(initialFocus, min * initialScale);
                 return;
             }
             // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
