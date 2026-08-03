@@ -1,49 +1,49 @@
 {
-  "expo": {
-    "name": "Field Atlas",
-    "slug": "maps",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "maps",
-    "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/images/icon.png"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#F6EFE1",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png",
-      "name": "Field Atlas",
-      "shortName": "Field Atlas",
-      "description": "Track which countries you've visited on an interactive world map.",
-      "themeColor": "#C1502E",
-      "backgroundColor": "#F6EFE1"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#F6EFE1",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+    "expo": {
+        "name": "Field Atlas",
+        "slug": "maps",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/images/icon.png",
+        "scheme": "maps",
+        "userInterfaceStyle": "automatic",
+        "ios": {
+            "icon": "./assets/images/icon.png"
+        },
+        "android": {
+            "adaptiveIcon": {
+                "backgroundColor": "#F6EFE1",
+                "foregroundImage": "./assets/images/android-icon-foreground.png",
+                "backgroundImage": "./assets/images/android-icon-background.png",
+                "monochromeImage": "./assets/images/android-icon-monochrome.png"
+            },
+            "predictiveBackGestureEnabled": false
+        },
+        "web": {
+            "output": "static",
+            "favicon": "./assets/images/favicon.png",
+            "name": "Field Atlas",
+            "shortName": "Field Atlas",
+            "description": "Track which countries you've visited on an interactive world map.",
+            "themeColor": "#C1502E",
+            "backgroundColor": "#F6EFE1"
+        },
+        "plugins": [
+            "expo-router",
+            [
+                "expo-splash-screen",
+                {
+                    "backgroundColor": "#F6EFE1",
+                    "image": "./assets/images/splash-icon.png",
+                    "imageWidth": 76
+                }
+            ],
+            "expo-secure-store",
+            "expo-web-browser"
+        ],
+        "experiments": {
+            "typedRoutes": true,
+            "reactCompiler": true
         }
-      ],
-      "expo-secure-store",
-      "expo-web-browser"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
     }
-  }
 }
