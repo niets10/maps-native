@@ -1,0 +1,41 @@
+---
+description: Run Prettier after every code change
+alwaysApply: true
+---
+
+# Run Prettier After Changes
+
+After editing or creating any source file, run Prettier on the changed file(s) before finishing the task.
+
+## When to Run
+
+- After using Write, StrReplace, or EditNotebook on code files
+- Before marking a task complete or responding to the user
+- Skip for markdown-only docs unless the user asked to format them
+
+## How to Run
+
+Format only the files you changed:
+
+```bash
+npx prettier --write path/to/changed-file.tsx
+```
+
+For multiple changed files in one step:
+
+```bash
+npx prettier --write path/to/file-a.tsx path/to/file-b.ts
+```
+
+To format the whole project (only when the user asks or many files changed):
+
+```bash
+npm run format
+```
+
+## Rules
+
+1. Always run Prettier as the last step after code edits — do not skip this.
+2. Prefer formatting only changed files over formatting the entire repo.
+3. If Prettier fails, fix the issue or report it — do not leave unformatted code.
+4. Do not manually reformat to match Prettier; let Prettier apply the project's config.

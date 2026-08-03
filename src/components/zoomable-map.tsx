@@ -1,28 +1,28 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  PanResponder,
-  Platform,
-  StyleSheet,
-  View,
-  type GestureResponderEvent,
-  type LayoutChangeEvent,
-  type PanResponderGestureState,
-} from "react-native";
+    PanResponder,
+    Platform,
+    StyleSheet,
+    View,
+    type GestureResponderEvent,
+    type LayoutChangeEvent,
+    type PanResponderGestureState,
+} from 'react-native';
 
-import { ThemedText } from "@/components/themed-text";
+import { ThemedText } from '@/components/themed-text';
 import {
-  MAP_ASPECT_RATIO,
-  MAP_VIEWBOX,
-  MAP_VIEWBOX_HEIGHT,
-  MAP_VIEWBOX_WIDTH,
-  WorldMap,
-  type CountryHover,
-} from "@/components/world-map";
-import { COUNTRIES_BY_CODE } from "@/constants/countries";
+    MAP_ASPECT_RATIO,
+    MAP_VIEWBOX,
+    MAP_VIEWBOX_HEIGHT,
+    MAP_VIEWBOX_WIDTH,
+    WorldMap,
+    type CountryHover,
+} from '@/components/world-map';
+import { COUNTRIES_BY_CODE } from '@/constants/countries';
 import { Spacing } from '@/constants/theme';
-import { useSupportsHover } from "@/hooks/use-supports-hover";
-import { useTheme } from "@/hooks/use-theme";
-import { flagEmoji } from "@/lib/utils";
+import { useSupportsHover } from '@/hooks/use-supports-hover';
+import { useTheme } from '@/hooks/use-theme';
+import { flagEmoji } from '@/lib/utils';
 
 /** Absolute floor: never zoom out further than the map's own (unscaled) resolution. */
 const MIN_SCALE_FLOOR = 1;
@@ -43,15 +43,15 @@ const TOOLTIP_WIDTH_ESTIMATE = 200;
 const TOOLTIP_HEIGHT_ESTIMATE = 44;
 
 const IDENTITY_TRANSFORM = {
-  transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }],
-  transformOrigin: [0, 0, 0],
+    transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }],
+    transformOrigin: [0, 0, 0],
 };
 
 type Point = { x: number; y: number };
 type Transform = { scale: number; x: number; y: number };
 
 function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
+    return Math.min(max, Math.max(min, value));
 }
 
 /**
@@ -59,680 +59,654 @@ function clamp(value: number, min: number, max: number) {
  * so the map stays sharp; during gestures we use a cheap View transform instead.
  */
 function transformToViewBox(
-  { scale, x, y }: Transform,
-  viewportWidth: number,
-  viewportHeight: number,
+    { scale, x, y }: Transform,
+    viewportWidth: number,
+    viewportHeight: number
 ): string {
-  if (viewportWidth <= 0 || viewportHeight <= 0 || scale <= 0)
-    return MAP_VIEWBOX;
-  const contentWidth = viewportWidth;
-  const contentHeight = contentWidth / MAP_ASPECT_RATIO;
-  const vbX = ((0 - x) / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
-  const vbY = ((0 - y) / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
-  const vbW = (viewportWidth / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
-  const vbH = (viewportHeight / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
-  return `${vbX} ${vbY} ${vbW} ${vbH}`;
+    if (viewportWidth <= 0 || viewportHeight <= 0 || scale <= 0) return MAP_VIEWBOX;
+    const contentWidth = viewportWidth;
+    const contentHeight = contentWidth / MAP_ASPECT_RATIO;
+    const vbX = ((0 - x) / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
+    const vbY = ((0 - y) / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
+    const vbW = (viewportWidth / scale / contentWidth) * MAP_VIEWBOX_WIDTH;
+    const vbH = (viewportHeight / scale / contentHeight) * MAP_VIEWBOX_HEIGHT;
+    return `${vbX} ${vbY} ${vbW} ${vbH}`;
 }
 
 /** Pinch distance + midpoint in container-local coords, derived from screen-space touches. */
 function getPinchFromPageTouches(
-  touches: { pageX: number; pageY: number }[],
-  pageOrigin: Point,
+    touches: { pageX: number; pageY: number }[],
+    pageOrigin: Point
 ): { distance: number; midpoint: Point } | null {
-  if (touches.length < 2) return null;
-  const [a, b] = touches;
-  const distance = Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
-  if (distance < 1) return null;
-  return {
-    distance,
-    midpoint: {
-      x: (a.pageX + b.pageX) / 2 - pageOrigin.x,
-      y: (a.pageY + b.pageY) / 2 - pageOrigin.y,
-    },
-  };
+    if (touches.length < 2) return null;
+    const [a, b] = touches;
+    const distance = Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+    if (distance < 1) return null;
+    return {
+        distance,
+        midpoint: {
+            x: (a.pageX + b.pageX) / 2 - pageOrigin.x,
+            y: (a.pageY + b.pageY) / 2 - pageOrigin.y,
+        },
+    };
 }
 
 type ZoomableMapProps = {
-  visited: Set<string>;
-  onToggle?: (countryCode: string) => void;
-  onCountryPress?: (countryCode: string) => void;
-  /** Fraction (0-1 on each axis) of the map to center on when it first mounts. */
-  initialFocus?: Point | null;
-  /** Zoom level to start at when centering on `initialFocus`. */
-  initialScale?: number;
+    visited: Set<string>;
+    onToggle?: (countryCode: string) => void;
+    onCountryPress?: (countryCode: string) => void;
+    /** Fraction (0-1 on each axis) of the map to center on when it first mounts. */
+    initialFocus?: Point | null;
+    /** Zoom level to start at when centering on `initialFocus`. */
+    initialScale?: number;
 };
 
 export function ZoomableMap({
-  visited,
-  onToggle,
-  onCountryPress,
-  initialFocus,
-  initialScale = 1,
+    visited,
+    onToggle,
+    onCountryPress,
+    initialFocus,
+    initialScale = 1,
 }: ZoomableMapProps) {
-  const theme = useTheme();
-  const isNative = Platform.OS !== "web";
-  const supportsHover = useSupportsHover();
-  const showHoverTooltip = Platform.OS === "web" && supportsHover;
+    const theme = useTheme();
+    const isNative = Platform.OS !== 'web';
+    const supportsHover = useSupportsHover();
+    const showHoverTooltip = Platform.OS === 'web' && supportsHover;
 
-  const containerRef = useRef<View>(null);
-  const contentRef = useRef<View>(null);
-  const containerSize = useRef({ width: 0, height: 0 });
-  // Screen-space origin of the viewport, kept in sync via `measureInWindow` so pinch
-  // math can convert `pageX`/`pageY` into container-local coordinates. Using
-  // `locationX`/`locationY` for multi-touch is wrong here: each finger often lands on a
-  // different SVG `<Path>`, so those values live in different local spaces and the
-  // computed pinch distance/midpoint is garbage.
-  const containerPageOrigin = useRef<Point>({ x: 0, y: 0 });
-  // Web layout can settle over a couple of passes (fonts, safe-area insets, etc.), so we
-  // keep re-centering on `initialFocus` across layout events until the user actually
-  // performs a gesture -- otherwise an early, smaller measurement can lock in an
-  // off-center transform that a later, correct measurement never fixes.
-  const userInteractedRef = useRef(false);
+    const containerRef = useRef<View>(null);
+    const contentRef = useRef<View>(null);
+    const containerSize = useRef({ width: 0, height: 0 });
+    // Screen-space origin of the viewport, kept in sync via `measureInWindow` so pinch
+    // math can convert `pageX`/`pageY` into container-local coordinates. Using
+    // `locationX`/`locationY` for multi-touch is wrong here: each finger often lands on a
+    // different SVG `<Path>`, so those values live in different local spaces and the
+    // computed pinch distance/midpoint is garbage.
+    const containerPageOrigin = useRef<Point>({ x: 0, y: 0 });
+    // Web layout can settle over a couple of passes (fonts, safe-area insets, etc.), so we
+    // keep re-centering on `initialFocus` across layout events until the user actually
+    // performs a gesture -- otherwise an early, smaller measurement can lock in an
+    // off-center transform that a later, correct measurement never fixes.
+    const userInteractedRef = useRef(false);
 
-  // The transform is mutated directly on the content node for every pointer/wheel tick
-  // (see `applyTransform`), so dragging and pinching stay smooth without round-tripping
-  // through React state on every frame. `scaleForUi` is mirrored into React state so
-  // the web cursor (grab vs default) updates after zoom gestures.
-  const transform = useRef<Transform>({ scale: initialScale, x: 0, y: 0 });
-  const [scaleForUi, setScaleForUi] = useState(initialScale);
+    // The transform is mutated directly on the content node for every pointer/wheel tick
+    // (see `applyTransform`), so dragging and pinching stay smooth without round-tripping
+    // through React state on every frame. `scaleForUi` is mirrored into React state so
+    // the web cursor (grab vs default) updates after zoom gestures.
+    const transform = useRef<Transform>({ scale: initialScale, x: 0, y: 0 });
+    const [scaleForUi, setScaleForUi] = useState(initialScale);
 
-  // Hybrid rendering: idle = sharp viewBox crop; gesture = cheap scale/pan (may soften
-  // briefly), then bake back into viewBox on release. Updating viewBox every frame was
-  // what froze the map.
-  const isGesturingRef = useRef(false);
-  const [isGesturing, setIsGesturing] = useState(false);
-  const [idleViewBox, setIdleViewBox] = useState(MAP_VIEWBOX);
+    // Hybrid rendering: idle = sharp viewBox crop; gesture = cheap scale/pan (may soften
+    // briefly), then bake back into viewBox on release. Updating viewBox every frame was
+    // what froze the map.
+    const isGesturingRef = useRef(false);
+    const [isGesturing, setIsGesturing] = useState(false);
+    const [idleViewBox, setIdleViewBox] = useState(MAP_VIEWBOX);
 
-  const gestureStartRef = useRef<{
-    transform: Transform;
-    pinchDistance: number | null;
-    pinchMidpoint: Point | null;
-    /** Cumulative dx/dy from PanResponder grant at the moment this drag segment began. */
-    dragOrigin: Point;
-  } | null>(null);
+    const gestureStartRef = useRef<{
+        transform: Transform;
+        pinchDistance: number | null;
+        pinchMidpoint: Point | null;
+        /** Cumulative dx/dy from PanResponder grant at the moment this drag segment began. */
+        dragOrigin: Point;
+    } | null>(null);
 
-  // Mirrors the `transform` pattern above: the tooltip follows the cursor by mutating its
-  // DOM node's style directly on every `mousemove`, so it can track the pointer at 60fps
-  // without a React re-render per pixel. `hoveredCode` (what's shown) changes far less
-  // often, so it's the only piece kept in state.
-  const [hoveredCode, setHoveredCode] = useState<string | null>(null);
-  const tooltipRef = useRef<View>(null);
+    // Mirrors the `transform` pattern above: the tooltip follows the cursor by mutating its
+    // DOM node's style directly on every `mousemove`, so it can track the pointer at 60fps
+    // without a React re-render per pixel. `hoveredCode` (what's shown) changes far less
+    // often, so it's the only piece kept in state.
+    const [hoveredCode, setHoveredCode] = useState<string | null>(null);
+    const tooltipRef = useRef<View>(null);
 
-  const positionTooltip = useCallback((clientX: number, clientY: number) => {
-    const tooltipNode = tooltipRef.current as unknown as HTMLElement | null;
-    const containerNode = containerRef.current as unknown as HTMLElement | null;
-    if (!tooltipNode || !containerNode) return;
-    const rect = containerNode.getBoundingClientRect();
-    const { width, height } = containerSize.current;
-    const x = clamp(
-      clientX - rect.left + TOOLTIP_OFFSET,
-      0,
-      Math.max(0, width - TOOLTIP_WIDTH_ESTIMATE),
+    const positionTooltip = useCallback((clientX: number, clientY: number) => {
+        const tooltipNode = tooltipRef.current as unknown as HTMLElement | null;
+        const containerNode = containerRef.current as unknown as HTMLElement | null;
+        if (!tooltipNode || !containerNode) return;
+        const rect = containerNode.getBoundingClientRect();
+        const { width, height } = containerSize.current;
+        const x = clamp(
+            clientX - rect.left + TOOLTIP_OFFSET,
+            0,
+            Math.max(0, width - TOOLTIP_WIDTH_ESTIMATE)
+        );
+        const y = clamp(
+            clientY - rect.top + TOOLTIP_OFFSET,
+            0,
+            Math.max(0, height - TOOLTIP_HEIGHT_ESTIMATE)
+        );
+        tooltipNode.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }, []);
+
+    const handleHoverChange = useCallback(
+        (hover: CountryHover) => {
+            setHoveredCode(hover?.code ?? null);
+            if (hover) positionTooltip(hover.clientX, hover.clientY);
+        },
+        [positionTooltip]
     );
-    const y = clamp(
-      clientY - rect.top + TOOLTIP_OFFSET,
-      0,
-      Math.max(0, height - TOOLTIP_HEIGHT_ESTIMATE),
-    );
-    tooltipNode.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  }, []);
 
-  const handleHoverChange = useCallback(
-    (hover: CountryHover) => {
-      setHoveredCode(hover?.code ?? null);
-      if (hover) positionTooltip(hover.clientX, hover.clientY);
-    },
-    [positionTooltip],
-  );
+    // Reassigned every render (like `handleWheelRef` below) so the native listener -- added
+    // once in `setContainerRef` -- always sees the latest `hoveredCode` without having to
+    // detach/reattach itself on every hover change.
+    const handlePointerMoveRef = useRef<(event: MouseEvent) => void>(() => {});
+    handlePointerMoveRef.current = (event: MouseEvent) => {
+        if (!hoveredCode) return;
+        positionTooltip(event.clientX, event.clientY);
+    };
 
-  // Reassigned every render (like `handleWheelRef` below) so the native listener -- added
-  // once in `setContainerRef` -- always sees the latest `hoveredCode` without having to
-  // detach/reattach itself on every hover change.
-  const handlePointerMoveRef = useRef<(event: MouseEvent) => void>(() => {});
-  handlePointerMoveRef.current = (event: MouseEvent) => {
-    if (!hoveredCode) return;
-    positionTooltip(event.clientX, event.clientY);
-  };
-
-  // The content layer is always exactly as wide as the viewport (see `content`'s style),
-  // so its native (unscaled) height is derived purely from the map artwork's own aspect
-  // ratio. "Contain" keeps the whole map visible at minimum zoom (letterboxing if needed);
-  // panning only unlocks once the user zooms in past that fit.
-  const getScaleBounds = useCallback((): { min: number; max: number } => {
-    const { width, height } = containerSize.current;
-    if (width === 0 || height === 0) {
-      return {
-        min: MIN_SCALE_FLOOR,
-        max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER,
-      };
-    }
-    const nativeContentHeight = width / MAP_ASPECT_RATIO;
-    const containScale = Math.min(
-      MIN_SCALE_FLOOR,
-      height / nativeContentHeight,
-    );
-    return { min: containScale, max: containScale * MAX_ZOOM_MULTIPLIER };
-  }, []);
-
-  const clampTransform = useCallback(
-    ({ scale, x, y }: Transform): Transform => {
-      const { width, height } = containerSize.current;
-      // Hidden tabs (or mid-layout passes) can report 0×0; clamping against that
-      // forces y→0 and permanently top-aligns the map once the user has zoomed.
-      if (width === 0 || height === 0) return { scale, x, y };
-      const { min, max } = getScaleBounds();
-      const nextScale = clamp(scale, min, max);
-      const nativeContentHeight = width / MAP_ASPECT_RATIO;
-      const scaledWidth = width * nextScale;
-      const scaledHeight = nativeContentHeight * nextScale;
-
-      const minX = scaledWidth <= width ? 0 : width - scaledWidth;
-      const maxX = scaledWidth <= width ? width - scaledWidth : 0;
-      const minY = scaledHeight <= height ? 0 : height - scaledHeight;
-      const maxY = scaledHeight <= height ? height - scaledHeight : 0;
-
-      return {
-        scale: nextScale,
-        x: clamp(x, minX, maxX),
-        y: clamp(y, minY, maxY),
-      };
-    },
-    [getScaleBounds],
-  );
-
-  const commitIdleViewBox = useCallback(() => {
-    const { width, height } = containerSize.current;
-    if (width === 0 || height === 0) return;
-    setIdleViewBox(transformToViewBox(transform.current, width, height));
-  }, []);
-
-  const applyTransform = useCallback(() => {
-    const { scale, x, y } = transform.current;
-    const { width } = containerSize.current;
-    const contentHeight = width / MAP_ASPECT_RATIO;
-    // Idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
-    if (!isGesturingRef.current) {
-      if (isNative) {
-        contentRef.current?.setNativeProps({ style: IDENTITY_TRANSFORM });
-      } else {
-        const node = contentRef.current as unknown as HTMLElement | null;
-        if (node) {
-          node.style.transformOrigin = "0 0";
-          node.style.transform = "translate3d(0px, 0px, 0) scale(1)";
-          node.style.width = "100%";
-          node.style.height = "";
+    // The content layer is always exactly as wide as the viewport (see `content`'s style),
+    // so its native (unscaled) height is derived purely from the map artwork's own aspect
+    // ratio. "Contain" keeps the whole map visible at minimum zoom (letterboxing if needed);
+    // panning only unlocks once the user zooms in past that fit.
+    const getScaleBounds = useCallback((): { min: number; max: number } => {
+        const { width, height } = containerSize.current;
+        if (width === 0 || height === 0) {
+            return {
+                min: MIN_SCALE_FLOOR,
+                max: MIN_SCALE_FLOOR * MAX_ZOOM_MULTIPLIER,
+            };
         }
-      }
-      return;
-    }
-    // Native: GPU-scale the full map layer.
-    if (isNative) {
-      contentRef.current?.setNativeProps({
-        style: {
-          transform: [{ translateX: x }, { translateY: y }, { scale }],
-          transformOrigin: [0, 0, 0],
-        },
-      });
-      return;
-    }
-    // Web: size the layer to the current zoom instead of CSS-scaling it, so SVG
-    // paths render at viewport resolution and stay sharp while panning.
-    const node = contentRef.current as unknown as HTMLElement | null;
-    if (!node || width === 0) return;
-    node.style.width = `${scale * width}px`;
-    node.style.height = `${scale * contentHeight}px`;
-    node.style.transformOrigin = "0 0";
-    node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  }, [isNative]);
+        const nativeContentHeight = width / MAP_ASPECT_RATIO;
+        const containScale = Math.min(MIN_SCALE_FLOOR, height / nativeContentHeight);
+        return { min: containScale, max: containScale * MAX_ZOOM_MULTIPLIER };
+    }, []);
 
-  const setTransform = useCallback(
-    (
-      next: Transform,
-      options?: { syncUi?: boolean; commitViewBox?: boolean },
-    ) => {
-      const clamped = clampTransform(next);
-      transform.current = clamped;
-      applyTransform();
-      if (options?.syncUi) setScaleForUi(clamped.scale);
-      if (options?.commitViewBox) commitIdleViewBox();
-    },
-    [applyTransform, clampTransform, commitIdleViewBox],
-  );
-
-  // When entering gesture mode, reveal the full-map layer and paint the absolute
-  // transform. When leaving, hide it again (idle viewBox takes over).
-  useLayoutEffect(() => {
-    isGesturingRef.current = isGesturing;
-    applyTransform();
-  }, [isGesturing, applyTransform]);
-
-  const beginGesture = useCallback(() => {
-    isGesturingRef.current = true;
-    setIsGesturing(true);
-  }, []);
-
-  const endGesture = useCallback(() => {
-    gestureStartRef.current = null;
-    if (!isGesturingRef.current) {
-      setScaleForUi(transform.current.scale);
-      return;
-    }
-    isGesturingRef.current = false;
-    commitIdleViewBox();
-    setIsGesturing(false);
-    setScaleForUi(transform.current.scale);
-  }, [commitIdleViewBox]);
-
-  const zoomAroundPoint = useCallback(
-    (
-      focal: Point,
-      nextScaleRaw: number,
-      from: Transform = transform.current,
-    ) => {
-      const { min, max } = getScaleBounds();
-      const nextScale = clamp(nextScaleRaw, min, max);
-      const contentX = (focal.x - from.x) / from.scale;
-      const contentY = (focal.y - from.y) / from.scale;
-      setTransform(
-        {
-          scale: nextScale,
-          x: focal.x - contentX * nextScale,
-          y: focal.y - contentY * nextScale,
-        },
-        { syncUi: true, commitViewBox: !isGesturingRef.current },
-      );
-    },
-    [getScaleBounds, setTransform],
-  );
-
-  const centerOn = useCallback(
-    (focusFraction: Point, scale: number) => {
-      const { width, height } = containerSize.current;
-      if (width === 0 || height === 0) return;
-      const { min, max } = getScaleBounds();
-      const nextScale = clamp(scale, min, max);
-      // `focusFraction` is a fraction of the map artwork's own dimensions, not the
-      // viewport's -- only the width happens to line up 1:1 (see `getScaleBounds` above).
-      const nativeContentHeight = width / MAP_ASPECT_RATIO;
-      setTransform(
-        {
-          scale: nextScale,
-          x: width / 2 - focusFraction.x * width * nextScale,
-          y: height / 2 - focusFraction.y * nativeContentHeight * nextScale,
-        },
-        { syncUi: true, commitViewBox: true },
-      );
-    },
-    [getScaleBounds, setTransform],
-  );
-
-  const handleContainerLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const { width, height } = event.nativeEvent.layout;
-      // Ignore zero-size layout events (e.g. when another tab is focused). Re-clamping
-      // against 0×0 corrupts the pan offset; after zoom, auto re-center is disabled.
-      if (width === 0 || height === 0) return;
-      containerSize.current = { width, height };
-      containerRef.current?.measureInWindow((x, y) => {
-        containerPageOrigin.current = { x, y };
-      });
-      if (!userInteractedRef.current) {
-        const { min } = getScaleBounds();
-        if (initialFocus) {
-          centerOn(initialFocus, initialScale);
-        } else {
-          centerOn({ x: 0.5, y: 0.5 }, min);
-        }
-        return;
-      }
-      // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
-      // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
-      // matters here too, since the contain-fit min/max scale is screen-size-dependent.
-      setTransform(transform.current, { syncUi: true, commitViewBox: true });
-    },
-    [centerOn, getScaleBounds, initialFocus, initialScale, setTransform],
-  );
-
-  // Trackpad pinch-to-zoom and ctrl+scroll both fire as `wheel` events with
-  // `ctrlKey: true` in browsers -- there's no native multi-touch event for trackpad
-  // gestures. A plain two-finger scroll (no ctrl) zooms too: pushing both fingers
-  // forward (away from you) zooms in, pulling them back zooms out. Panning is
-  // reserved for click-and-drag, matching Google Maps' touchscreen behavior.
-  const handleWheelRef = useRef<(event: WheelEvent) => void>(() => {});
-  handleWheelRef.current = (event: WheelEvent) => {
-    event.preventDefault();
-    userInteractedRef.current = true;
-    const rect = (
-      containerRef.current as unknown as HTMLElement
-    ).getBoundingClientRect();
-    const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY);
-    zoomAroundPoint(focal, transform.current.scale * factor);
-  };
-
-  const wheelListenerCleanupRef = useRef<(() => void) | null>(null);
-  const setContainerRef = useCallback((node: View | null) => {
-    containerRef.current = node;
-    wheelListenerCleanupRef.current?.();
-    wheelListenerCleanupRef.current = null;
-    if (Platform.OS !== "web" || !node) return;
-
-    const domNode = node as unknown as HTMLElement;
-    const wheelListener = (event: WheelEvent) => handleWheelRef.current(event);
-    const moveListener = (event: MouseEvent) =>
-      handlePointerMoveRef.current(event);
-    const leaveListener = () => setHoveredCode(null);
-    // Block browser page pinch-zoom while the user is pinching on the map. Without this
-    // (and touch-action: none), mobile PWAs zoom the whole app instead of the map layer.
-    const blockMultiTouch = (event: TouchEvent) => {
-      if (event.touches.length >= 2) event.preventDefault();
-    };
-    const blockLegacyGesture = (event: Event) => {
-      event.preventDefault();
-    };
-    domNode.addEventListener("wheel", wheelListener, { passive: false });
-    domNode.addEventListener("mousemove", moveListener);
-    domNode.addEventListener("mouseleave", leaveListener);
-    domNode.addEventListener("touchstart", blockMultiTouch, { passive: false });
-    domNode.addEventListener("touchmove", blockMultiTouch, { passive: false });
-    domNode.addEventListener("gesturestart", blockLegacyGesture);
-    domNode.addEventListener("gesturechange", blockLegacyGesture);
-    wheelListenerCleanupRef.current = () => {
-      domNode.removeEventListener("wheel", wheelListener);
-      domNode.removeEventListener("mousemove", moveListener);
-      domNode.removeEventListener("mouseleave", leaveListener);
-      domNode.removeEventListener("touchstart", blockMultiTouch);
-      domNode.removeEventListener("touchmove", blockMultiTouch);
-      domNode.removeEventListener("gesturestart", blockLegacyGesture);
-      domNode.removeEventListener("gesturechange", blockLegacyGesture);
-    };
-  }, []);
-
-  const canPanAtCurrentScale = useCallback(() => {
-    const { width, height } = containerSize.current;
-    if (width === 0 || height === 0) return false;
-    const { scale } = transform.current;
-    const contentHeight = width / MAP_ASPECT_RATIO;
-    const scaledWidth = width * scale;
-    const scaledHeight = contentHeight * scale;
-    return scaledWidth > width + 0.5 || scaledHeight > height + 0.5;
-  }, []);
-
-  const captureGestureStart = useCallback(
-    (event: GestureResponderEvent, gestureState?: PanResponderGestureState) => {
-      const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
-      const pinch = getPinchFromPageTouches(
-        event.nativeEvent.touches,
-        containerPageOrigin.current,
-      );
-      if (pinch) {
-        gestureStartRef.current = {
-          transform: transform.current,
-          pinchDistance: pinch.distance,
-          pinchMidpoint: pinch.midpoint,
-          dragOrigin,
-        };
-        return;
-      }
-      gestureStartRef.current = {
-        transform: transform.current,
-        pinchDistance: null,
-        pinchMidpoint: null,
-        dragOrigin,
-      };
-    },
-    [],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        // Steal two-finger touches before SVG country paths claim them -- otherwise the
-        // parent never becomes the responder and pinch never starts.
-        onStartShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
-          event.nativeEvent.touches.length >= 2,
-        // One-finger drags must capture too: the idle sharp layer's Path onPress handlers
-        // otherwise own the touch and pan never starts.
-        onMoveShouldSetPanResponderCapture: (
-          event: GestureResponderEvent,
-          gestureState: PanResponderGestureState,
-        ) => {
-          if (event.nativeEvent.touches.length >= 2) return true;
-          if (!canPanAtCurrentScale()) return false;
-          return (
-            Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
-            Math.abs(gestureState.dy) > DRAG_THRESHOLD
-          );
-        },
-        onMoveShouldSetPanResponder: (
-          event: GestureResponderEvent,
-          gestureState: PanResponderGestureState,
-        ) => {
-          if (event.nativeEvent.touches.length >= 2) return true;
-          if (!canPanAtCurrentScale()) return false;
-          return (
-            Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
-            Math.abs(gestureState.dy) > DRAG_THRESHOLD
-          );
-        },
-        onPanResponderGrant: (
-          event: GestureResponderEvent,
-          gestureState: PanResponderGestureState,
-        ) => {
-          userInteractedRef.current = true;
-          beginGesture();
-          captureGestureStart(event, gestureState);
-        },
-        onPanResponderMove: (
-          event: GestureResponderEvent,
-          gestureState: PanResponderGestureState,
-        ) => {
-          // Switch to the full-map layer on grant; wait until that paint lands so we don't
-          // apply an absolute transform onto the cropped idle viewBox.
-          if (!isGesturingRef.current) return;
-
-          const touches = event.nativeEvent.touches;
-          let start = gestureStartRef.current;
-
-          // Second finger landed mid-drag -- restart as a pinch from the live transform.
-          if (
-            touches.length >= 2 &&
-            (!start?.pinchDistance || !start.pinchMidpoint)
-          ) {
-            captureGestureStart(event, gestureState);
-            start = gestureStartRef.current;
-          }
-
-          if (!start) return;
-
-          if (
-            touches.length >= 2 &&
-            start.pinchDistance &&
-            start.pinchMidpoint
-          ) {
-            const pinch = getPinchFromPageTouches(
-              touches,
-              containerPageOrigin.current,
-            );
-            if (!pinch) return;
-            // Keep the content under the original pinch midpoint locked to the
-            // moving midpoint (standard map pinch = zoom + pan together).
+    const clampTransform = useCallback(
+        ({ scale, x, y }: Transform): Transform => {
+            const { width, height } = containerSize.current;
+            // Hidden tabs (or mid-layout passes) can report 0×0; clamping against that
+            // forces y→0 and permanently top-aligns the map once the user has zoomed.
+            if (width === 0 || height === 0) return { scale, x, y };
             const { min, max } = getScaleBounds();
-            const nextScale = clamp(
-              start.transform.scale * (pinch.distance / start.pinchDistance),
-              min,
-              max,
-            );
-            const contentX =
-              (start.pinchMidpoint.x - start.transform.x) /
-              start.transform.scale;
-            const contentY =
-              (start.pinchMidpoint.y - start.transform.y) /
-              start.transform.scale;
-            setTransform({
-              scale: nextScale,
-              x: pinch.midpoint.x - contentX * nextScale,
-              y: pinch.midpoint.y - contentY * nextScale,
+            const nextScale = clamp(scale, min, max);
+            const nativeContentHeight = width / MAP_ASPECT_RATIO;
+            const scaledWidth = width * nextScale;
+            const scaledHeight = nativeContentHeight * nextScale;
+
+            const minX = scaledWidth <= width ? 0 : width - scaledWidth;
+            const maxX = scaledWidth <= width ? width - scaledWidth : 0;
+            const minY = scaledHeight <= height ? 0 : height - scaledHeight;
+            const maxY = scaledHeight <= height ? height - scaledHeight : 0;
+
+            return {
+                scale: nextScale,
+                x: clamp(x, minX, maxX),
+                y: clamp(y, minY, maxY),
+            };
+        },
+        [getScaleBounds]
+    );
+
+    const commitIdleViewBox = useCallback(() => {
+        const { width, height } = containerSize.current;
+        if (width === 0 || height === 0) return;
+        setIdleViewBox(transformToViewBox(transform.current, width, height));
+    }, []);
+
+    const applyTransform = useCallback(() => {
+        const { scale, x, y } = transform.current;
+        const { width } = containerSize.current;
+        const contentHeight = width / MAP_ASPECT_RATIO;
+        // Idle: the sharp viewBox layer is showing; keep the gesture layer at identity.
+        if (!isGesturingRef.current) {
+            if (isNative) {
+                contentRef.current?.setNativeProps({ style: IDENTITY_TRANSFORM });
+            } else {
+                const node = contentRef.current as unknown as HTMLElement | null;
+                if (node) {
+                    node.style.transformOrigin = '0 0';
+                    node.style.transform = 'translate3d(0px, 0px, 0) scale(1)';
+                    node.style.width = '100%';
+                    node.style.height = '';
+                }
+            }
+            return;
+        }
+        // Native: GPU-scale the full map layer.
+        if (isNative) {
+            contentRef.current?.setNativeProps({
+                style: {
+                    transform: [{ translateX: x }, { translateY: y }, { scale }],
+                    transformOrigin: [0, 0, 0],
+                },
             });
             return;
-          }
+        }
+        // Web: size the layer to the current zoom instead of CSS-scaling it, so SVG
+        // paths render at viewport resolution and stay sharp while panning.
+        const node = contentRef.current as unknown as HTMLElement | null;
+        if (!node || width === 0) return;
+        node.style.width = `${scale * width}px`;
+        node.style.height = `${scale * contentHeight}px`;
+        node.style.transformOrigin = '0 0';
+        node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }, [isNative]);
 
-          // Dropped back to one finger mid-pinch -- restart as a drag.
-          if (start.pinchDistance) {
-            captureGestureStart(event, gestureState);
+    const setTransform = useCallback(
+        (next: Transform, options?: { syncUi?: boolean; commitViewBox?: boolean }) => {
+            const clamped = clampTransform(next);
+            transform.current = clamped;
+            applyTransform();
+            if (options?.syncUi) setScaleForUi(clamped.scale);
+            if (options?.commitViewBox) commitIdleViewBox();
+        },
+        [applyTransform, clampTransform, commitIdleViewBox]
+    );
+
+    // When entering gesture mode, reveal the full-map layer and paint the absolute
+    // transform. When leaving, hide it again (idle viewBox takes over).
+    useLayoutEffect(() => {
+        isGesturingRef.current = isGesturing;
+        applyTransform();
+    }, [isGesturing, applyTransform]);
+
+    const beginGesture = useCallback(() => {
+        isGesturingRef.current = true;
+        setIsGesturing(true);
+    }, []);
+
+    const endGesture = useCallback(() => {
+        gestureStartRef.current = null;
+        if (!isGesturingRef.current) {
+            setScaleForUi(transform.current.scale);
             return;
-          }
+        }
+        isGesturingRef.current = false;
+        commitIdleViewBox();
+        setIsGesturing(false);
+        setScaleForUi(transform.current.scale);
+    }, [commitIdleViewBox]);
 
-          setTransform({
-            scale: start.transform.scale,
-            x: start.transform.x + (gestureState.dx - start.dragOrigin.x),
-            y: start.transform.y + (gestureState.dy - start.dragOrigin.y),
-          });
+    const zoomAroundPoint = useCallback(
+        (focal: Point, nextScaleRaw: number, from: Transform = transform.current) => {
+            const { min, max } = getScaleBounds();
+            const nextScale = clamp(nextScaleRaw, min, max);
+            const contentX = (focal.x - from.x) / from.scale;
+            const contentY = (focal.y - from.y) / from.scale;
+            setTransform(
+                {
+                    scale: nextScale,
+                    x: focal.x - contentX * nextScale,
+                    y: focal.y - contentY * nextScale,
+                },
+                { syncUi: true, commitViewBox: !isGesturingRef.current }
+            );
         },
-        onPanResponderRelease: () => {
-          endGesture();
-        },
-        onPanResponderTerminate: () => {
-          endGesture();
-        },
-      }),
-    [
-      beginGesture,
-      canPanAtCurrentScale,
-      captureGestureStart,
-      endGesture,
-      getScaleBounds,
-      setTransform,
-    ],
-  );
+        [getScaleBounds, setTransform]
+    );
 
-  const { min: minScale } = getScaleBounds();
+    const centerOn = useCallback(
+        (focusFraction: Point, scale: number) => {
+            const { width, height } = containerSize.current;
+            if (width === 0 || height === 0) return;
+            const { min, max } = getScaleBounds();
+            const nextScale = clamp(scale, min, max);
+            // `focusFraction` is a fraction of the map artwork's own dimensions, not the
+            // viewport's -- only the width happens to line up 1:1 (see `getScaleBounds` above).
+            const nativeContentHeight = width / MAP_ASPECT_RATIO;
+            setTransform(
+                {
+                    scale: nextScale,
+                    x: width / 2 - focusFraction.x * width * nextScale,
+                    y: height / 2 - focusFraction.y * nativeContentHeight * nextScale,
+                },
+                { syncUi: true, commitViewBox: true }
+            );
+        },
+        [getScaleBounds, setTransform]
+    );
 
-  return (
-    <View style={styles.wrapper}>
-      <View
-        ref={setContainerRef}
-        style={[
-          styles.viewport,
-          Platform.OS === "web" &&
-            (webCursorStyle({
-              canPan: scaleForUi > minScale + SCALE_EPSILON,
-              isHoveringCountry: Boolean(hoveredCode),
-            }) as unknown as Record<string, unknown>),
-        ]}
-        onLayout={handleContainerLayout}
-        {...panResponder.panHandlers}
-      >
-        {/* Sharp idle layer: viewBox crop at viewport resolution. */}
-        <View
-          style={[styles.idleLayer, isGesturing && styles.invisible]}
-          pointerEvents={isGesturing ? "none" : "auto"}
-        >
-          <WorldMap
-            visited={visited}
-            onToggle={onToggle}
-            onCountryPress={onCountryPress}
-            onHoverChange={showHoverTooltip ? handleHoverChange : undefined}
-            fillParent
-            mapViewBox={idleViewBox}
-          />
+    const handleContainerLayout = useCallback(
+        (event: LayoutChangeEvent) => {
+            const { width, height } = event.nativeEvent.layout;
+            // Ignore zero-size layout events (e.g. when another tab is focused). Re-clamping
+            // against 0×0 corrupts the pan offset; after zoom, auto re-center is disabled.
+            if (width === 0 || height === 0) return;
+            containerSize.current = { width, height };
+            containerRef.current?.measureInWindow((x, y) => {
+                containerPageOrigin.current = { x, y };
+            });
+            if (!userInteractedRef.current) {
+                const { min } = getScaleBounds();
+                if (initialFocus) {
+                    centerOn(initialFocus, initialScale);
+                } else {
+                    centerOn({ x: 0.5, y: 0.5 }, min);
+                }
+                return;
+            }
+            // Re-clamp and re-apply in case a resize (e.g. orientation change) shrank the
+            // viewport enough that the current pan/zoom is no longer in bounds. `syncUi`
+            // matters here too, since the contain-fit min/max scale is screen-size-dependent.
+            setTransform(transform.current, { syncUi: true, commitViewBox: true });
+        },
+        [centerOn, getScaleBounds, initialFocus, initialScale, setTransform]
+    );
+
+    // Trackpad pinch-to-zoom and ctrl+scroll both fire as `wheel` events with
+    // `ctrlKey: true` in browsers -- there's no native multi-touch event for trackpad
+    // gestures. A plain two-finger scroll (no ctrl) zooms too: pushing both fingers
+    // forward (away from you) zooms in, pulling them back zooms out. Panning is
+    // reserved for click-and-drag, matching Google Maps' touchscreen behavior.
+    const handleWheelRef = useRef<(event: WheelEvent) => void>(() => {});
+    handleWheelRef.current = (event: WheelEvent) => {
+        event.preventDefault();
+        userInteractedRef.current = true;
+        const rect = (containerRef.current as unknown as HTMLElement).getBoundingClientRect();
+        const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY);
+        zoomAroundPoint(focal, transform.current.scale * factor);
+    };
+
+    const wheelListenerCleanupRef = useRef<(() => void) | null>(null);
+    const setContainerRef = useCallback((node: View | null) => {
+        containerRef.current = node;
+        wheelListenerCleanupRef.current?.();
+        wheelListenerCleanupRef.current = null;
+        if (Platform.OS !== 'web' || !node) return;
+
+        const domNode = node as unknown as HTMLElement;
+        const wheelListener = (event: WheelEvent) => handleWheelRef.current(event);
+        const moveListener = (event: MouseEvent) => handlePointerMoveRef.current(event);
+        const leaveListener = () => setHoveredCode(null);
+        // Block browser page pinch-zoom while the user is pinching on the map. Without this
+        // (and touch-action: none), mobile PWAs zoom the whole app instead of the map layer.
+        const blockMultiTouch = (event: TouchEvent) => {
+            if (event.touches.length >= 2) event.preventDefault();
+        };
+        const blockLegacyGesture = (event: Event) => {
+            event.preventDefault();
+        };
+        domNode.addEventListener('wheel', wheelListener, { passive: false });
+        domNode.addEventListener('mousemove', moveListener);
+        domNode.addEventListener('mouseleave', leaveListener);
+        domNode.addEventListener('touchstart', blockMultiTouch, { passive: false });
+        domNode.addEventListener('touchmove', blockMultiTouch, { passive: false });
+        domNode.addEventListener('gesturestart', blockLegacyGesture);
+        domNode.addEventListener('gesturechange', blockLegacyGesture);
+        wheelListenerCleanupRef.current = () => {
+            domNode.removeEventListener('wheel', wheelListener);
+            domNode.removeEventListener('mousemove', moveListener);
+            domNode.removeEventListener('mouseleave', leaveListener);
+            domNode.removeEventListener('touchstart', blockMultiTouch);
+            domNode.removeEventListener('touchmove', blockMultiTouch);
+            domNode.removeEventListener('gesturestart', blockLegacyGesture);
+            domNode.removeEventListener('gesturechange', blockLegacyGesture);
+        };
+    }, []);
+
+    const canPanAtCurrentScale = useCallback(() => {
+        const { width, height } = containerSize.current;
+        if (width === 0 || height === 0) return false;
+        const { scale } = transform.current;
+        const contentHeight = width / MAP_ASPECT_RATIO;
+        const scaledWidth = width * scale;
+        const scaledHeight = contentHeight * scale;
+        return scaledWidth > width + 0.5 || scaledHeight > height + 0.5;
+    }, []);
+
+    const captureGestureStart = useCallback(
+        (event: GestureResponderEvent, gestureState?: PanResponderGestureState) => {
+            const dragOrigin = { x: gestureState?.dx ?? 0, y: gestureState?.dy ?? 0 };
+            const pinch = getPinchFromPageTouches(
+                event.nativeEvent.touches,
+                containerPageOrigin.current
+            );
+            if (pinch) {
+                gestureStartRef.current = {
+                    transform: transform.current,
+                    pinchDistance: pinch.distance,
+                    pinchMidpoint: pinch.midpoint,
+                    dragOrigin,
+                };
+                return;
+            }
+            gestureStartRef.current = {
+                transform: transform.current,
+                pinchDistance: null,
+                pinchMidpoint: null,
+                dragOrigin,
+            };
+        },
+        []
+    );
+
+    const panResponder = useMemo(
+        () =>
+            PanResponder.create({
+                onStartShouldSetPanResponder: () => false,
+                // Steal two-finger touches before SVG country paths claim them -- otherwise the
+                // parent never becomes the responder and pinch never starts.
+                onStartShouldSetPanResponderCapture: (event: GestureResponderEvent) =>
+                    event.nativeEvent.touches.length >= 2,
+                // One-finger drags must capture too: the idle sharp layer's Path onPress handlers
+                // otherwise own the touch and pan never starts.
+                onMoveShouldSetPanResponderCapture: (
+                    event: GestureResponderEvent,
+                    gestureState: PanResponderGestureState
+                ) => {
+                    if (event.nativeEvent.touches.length >= 2) return true;
+                    if (!canPanAtCurrentScale()) return false;
+                    return (
+                        Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
+                        Math.abs(gestureState.dy) > DRAG_THRESHOLD
+                    );
+                },
+                onMoveShouldSetPanResponder: (
+                    event: GestureResponderEvent,
+                    gestureState: PanResponderGestureState
+                ) => {
+                    if (event.nativeEvent.touches.length >= 2) return true;
+                    if (!canPanAtCurrentScale()) return false;
+                    return (
+                        Math.abs(gestureState.dx) > DRAG_THRESHOLD ||
+                        Math.abs(gestureState.dy) > DRAG_THRESHOLD
+                    );
+                },
+                onPanResponderGrant: (
+                    event: GestureResponderEvent,
+                    gestureState: PanResponderGestureState
+                ) => {
+                    userInteractedRef.current = true;
+                    beginGesture();
+                    captureGestureStart(event, gestureState);
+                },
+                onPanResponderMove: (
+                    event: GestureResponderEvent,
+                    gestureState: PanResponderGestureState
+                ) => {
+                    // Switch to the full-map layer on grant; wait until that paint lands so we don't
+                    // apply an absolute transform onto the cropped idle viewBox.
+                    if (!isGesturingRef.current) return;
+
+                    const touches = event.nativeEvent.touches;
+                    let start = gestureStartRef.current;
+
+                    // Second finger landed mid-drag -- restart as a pinch from the live transform.
+                    if (touches.length >= 2 && (!start?.pinchDistance || !start.pinchMidpoint)) {
+                        captureGestureStart(event, gestureState);
+                        start = gestureStartRef.current;
+                    }
+
+                    if (!start) return;
+
+                    if (touches.length >= 2 && start.pinchDistance && start.pinchMidpoint) {
+                        const pinch = getPinchFromPageTouches(touches, containerPageOrigin.current);
+                        if (!pinch) return;
+                        // Keep the content under the original pinch midpoint locked to the
+                        // moving midpoint (standard map pinch = zoom + pan together).
+                        const { min, max } = getScaleBounds();
+                        const nextScale = clamp(
+                            start.transform.scale * (pinch.distance / start.pinchDistance),
+                            min,
+                            max
+                        );
+                        const contentX =
+                            (start.pinchMidpoint.x - start.transform.x) / start.transform.scale;
+                        const contentY =
+                            (start.pinchMidpoint.y - start.transform.y) / start.transform.scale;
+                        setTransform({
+                            scale: nextScale,
+                            x: pinch.midpoint.x - contentX * nextScale,
+                            y: pinch.midpoint.y - contentY * nextScale,
+                        });
+                        return;
+                    }
+
+                    // Dropped back to one finger mid-pinch -- restart as a drag.
+                    if (start.pinchDistance) {
+                        captureGestureStart(event, gestureState);
+                        return;
+                    }
+
+                    setTransform({
+                        scale: start.transform.scale,
+                        x: start.transform.x + (gestureState.dx - start.dragOrigin.x),
+                        y: start.transform.y + (gestureState.dy - start.dragOrigin.y),
+                    });
+                },
+                onPanResponderRelease: () => {
+                    endGesture();
+                },
+                onPanResponderTerminate: () => {
+                    endGesture();
+                },
+            }),
+        [
+            beginGesture,
+            canPanAtCurrentScale,
+            captureGestureStart,
+            endGesture,
+            getScaleBounds,
+            setTransform,
+        ]
+    );
+
+    const { min: minScale } = getScaleBounds();
+
+    return (
+        <View style={styles.wrapper}>
+            <View
+                ref={setContainerRef}
+                style={[
+                    styles.viewport,
+                    Platform.OS === 'web' &&
+                        (webCursorStyle({
+                            canPan: scaleForUi > minScale + SCALE_EPSILON,
+                            isHoveringCountry: Boolean(hoveredCode),
+                        }) as unknown as Record<string, unknown>),
+                ]}
+                onLayout={handleContainerLayout}
+                {...panResponder.panHandlers}
+            >
+                {/* Sharp idle layer: viewBox crop at viewport resolution. */}
+                <View
+                    style={[styles.idleLayer, isGesturing && styles.invisible]}
+                    pointerEvents={isGesturing ? 'none' : 'auto'}
+                >
+                    <WorldMap
+                        visited={visited}
+                        onToggle={onToggle}
+                        onCountryPress={onCountryPress}
+                        onHoverChange={showHoverTooltip ? handleHoverChange : undefined}
+                        fillParent
+                        mapViewBox={idleViewBox}
+                    />
+                </View>
+                {/* Gesture layer: full map + transform (always mounted so grant is instant). */}
+                <View
+                    ref={contentRef}
+                    style={[styles.content, !isGesturing && styles.invisible]}
+                    pointerEvents="none"
+                >
+                    <WorldMap visited={visited} interactive={false} />
+                </View>
+
+                {showHoverTooltip ? (
+                    <View
+                        ref={tooltipRef}
+                        pointerEvents="none"
+                        style={[
+                            styles.tooltip,
+                            {
+                                backgroundColor: theme.backgroundElement,
+                                borderColor: theme.border,
+                                display: hoveredCode ? 'flex' : 'none',
+                            },
+                        ]}
+                    >
+                        {hoveredCode ? (
+                            <>
+                                <ThemedText style={styles.tooltipFlag}>
+                                    {flagEmoji(hoveredCode)}
+                                </ThemedText>
+                                <ThemedText type="smallBold">
+                                    {COUNTRIES_BY_CODE[hoveredCode]?.name}
+                                </ThemedText>
+                            </>
+                        ) : null}
+                    </View>
+                ) : null}
+            </View>
         </View>
-        {/* Gesture layer: full map + transform (always mounted so grant is instant). */}
-        <View
-          ref={contentRef}
-          style={[styles.content, !isGesturing && styles.invisible]}
-          pointerEvents="none"
-        >
-          <WorldMap visited={visited} interactive={false} />
-        </View>
-
-        {showHoverTooltip ? (
-          <View
-            ref={tooltipRef}
-            pointerEvents="none"
-            style={[
-              styles.tooltip,
-              {
-                backgroundColor: theme.backgroundElement,
-                borderColor: theme.border,
-                display: hoveredCode ? "flex" : "none",
-              },
-            ]}
-          >
-            {hoveredCode ? (
-              <>
-                <ThemedText style={styles.tooltipFlag}>
-                  {flagEmoji(hoveredCode)}
-                </ThemedText>
-                <ThemedText type="smallBold">
-                  {COUNTRIES_BY_CODE[hoveredCode]?.name}
-                </ThemedText>
-              </>
-            ) : null}
-          </View>
-        ) : null}
-      </View>
-    </View>
-  );
+    );
 }
 
 // `cursor` isn't part of RN's ViewStyle typings, but react-native-web passes it straight
 // through to the underlying `<div>`, so it's a harmless no-op on native.
 function webCursorStyle({
-  canPan,
-  isHoveringCountry,
+    canPan,
+    isHoveringCountry,
 }: {
-  canPan: boolean;
-  isHoveringCountry: boolean;
+    canPan: boolean;
+    isHoveringCountry: boolean;
 }) {
-  if (isHoveringCountry) return { cursor: "pointer" };
-  if (canPan) return { cursor: "grab" };
-  return { cursor: "default" };
+    if (isHoveringCountry) return { cursor: 'pointer' };
+    if (canPan) return { cursor: 'grab' };
+    return { cursor: 'default' };
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    width: "100%",
-  },
-  viewport: {
-    flex: 1,
-    width: "100%",
-    overflow: "hidden",
-    ...Platform.select({
-      web: {
-        touchAction: "none",
-        overscrollBehavior: "none",
-      },
-      default: {},
-    }),
-  },
-  content: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-  },
-  idleLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  invisible: {
-    opacity: 0,
-  },
-  tooltip: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-  },
-  tooltipFlag: {
-    fontSize: 20,
-  },
+    wrapper: {
+        flex: 1,
+        width: '100%',
+    },
+    viewport: {
+        flex: 1,
+        width: '100%',
+        overflow: 'hidden',
+        ...Platform.select({
+            web: {
+                touchAction: 'none',
+                overscrollBehavior: 'none',
+            },
+            default: {},
+        }),
+    },
+    content: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+    },
+    idleLayer: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    invisible: {
+        opacity: 0,
+    },
+    tooltip: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.two,
+        paddingHorizontal: Spacing.three,
+        paddingVertical: Spacing.two,
+        borderRadius: Spacing.three,
+        borderWidth: 1,
+    },
+    tooltipFlag: {
+        fontSize: 20,
+    },
 });
